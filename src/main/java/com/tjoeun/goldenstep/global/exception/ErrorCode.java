@@ -1,0 +1,34 @@
+package com.tjoeun.goldenstep.global.exception;
+
+import lombok.Getter;
+
+@Getter
+public enum ErrorCode {
+
+	// 공통 요청 오류
+	INVALID_INPUT(400, "G001", "입력값이 올바르지 않습니다. 표시된 항목을 확인해주세요."),
+	REQUEST_BODY_MISSING(400, "G002", "요청 내용이 비어 있습니다. 입력 정보를 함께 보내주세요."),
+	INVALID_REQUEST_BODY(400, "G003", "요청 내용을 읽을 수 없습니다. 입력값의 형식을 확인해주세요."),
+	MISSING_REQUEST_PARAMETER(400, "G004", "요청에 필요한 항목이 없습니다."),
+	INTERNAL_SERVER_ERROR(500, "G999", "서버에서 요청을 처리하는 중 오류가 발생했습니다."),
+
+	// 실종 정보 입력 오류
+	INVALID_LAST_SEEN_AT(400, "S001", "마지막 확인 시각은 현재 시각보다 이전이어야 합니다."),
+	INVALID_MINUTE_INTERVAL(400, "S002", "마지막 확인 시각의 분은 5분 간격으로 선택해주세요."),
+	INVALID_LOCATION(400, "S003", "마지막 확인 위치의 좌표가 올바르지 않습니다. 지도에서 다시 선택해주세요."),
+
+	// 탐색 세션 오류: 쿠키를 이용한 세션 조회 API에서 사용
+	RECOVERY_TOKEN_MISSING(401, "S005", "탐색 정보를 확인할 수 없습니다. 이 브라우저에서 탐색을 다시 시작해주세요."),
+	SEARCH_SESSION_NOT_FOUND(401, "S006", "이 브라우저에 연결된 탐색 정보를 찾을 수 없습니다. 탐색을 다시 시작해주세요."),
+	SEARCH_SESSION_EXPIRED(410, "S007", "탐색 정보의 보관 기간이 끝났습니다. 탐색을 다시 시작해주세요.");
+
+	private final int status;
+	private final String divisionCode;
+	private final String message;
+
+	ErrorCode(int status, String divisionCode, String message) {
+		this.status = status;
+		this.divisionCode = divisionCode;
+		this.message = message;
+	}
+}
