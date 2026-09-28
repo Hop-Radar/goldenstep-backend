@@ -1,12 +1,3 @@
-DROP TABLE IF EXISTS `place_check`;
-DROP TABLE IF EXISTS `priority_place`;
-DROP TABLE IF EXISTS `time_result`;
-DROP TABLE IF EXISTS `analysis_run`;
-DROP TABLE IF EXISTS `snapshot_place`;
-DROP TABLE IF EXISTS `snapshot`;
-DROP TABLE IF EXISTS `search_session`;
-
-
 CREATE TABLE IF NOT EXISTS `search_session` (
     `id` BIGINT NOT NULL AUTO_INCREMENT
         COMMENT '탐색 세션 ID',
