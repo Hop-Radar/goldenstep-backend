@@ -27,30 +27,48 @@ public class SearchSession {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
-	
+
 	@Column(name = "recovery_token_hash", nullable = false, length = 64, columnDefinition = "char(64)")
 	private String recoveryTokenHash;
-	
+
 	@Column(name = "last_lat", nullable = false, precision = 10, scale = 7)
 	private BigDecimal lastLat;
-	
+
 	@Column(name = "last_lng", nullable = false, precision = 10, scale = 7)
 	private BigDecimal lastLng;
-	
+
 	@Column(name = "last_address", length = 255)
 	private String lastAddress;
-	
+
 	@Column(name = "last_seen_at", nullable = false)
 	private LocalDateTime lastSeenAt;
-	
+
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "person_attributes", nullable = false, columnDefinition = "json")
 	private Map<String, Object> personAttributes;
-	
-	@CreationTimestamp
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
-	
+
 	@Column(name = "expires_at", nullable = false)
 	private LocalDateTime expiresAt;
+
+	public SearchSession(
+	        String recoveryTokenHash,
+	        BigDecimal lastLat,
+	        BigDecimal lastLng,
+	        String lastAddress,
+	        LocalDateTime lastSeenAt,
+	        Map<String, Object> personAttributes,
+	        LocalDateTime createdAt
+	) {
+	    this.recoveryTokenHash = recoveryTokenHash;
+	    this.lastLat = lastLat;
+	    this.lastLng = lastLng;
+	    this.lastAddress = lastAddress;
+	    this.lastSeenAt = lastSeenAt;
+	    this.personAttributes = personAttributes;
+	    this.createdAt = createdAt;
+	    this.expiresAt = createdAt.plusHours(24);
+	}
 }
