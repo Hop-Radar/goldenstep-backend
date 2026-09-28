@@ -4,6 +4,9 @@ import java.util.List;
 
 import org.springframework.validation.BindingResult;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "API 오류 응답")
 public record ErrorResponse(
         boolean success,
         int status,
