@@ -14,6 +14,9 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.tjoeun.goldenstep.analysis.entity.AnalysisRun;
+import com.tjoeun.goldenstep.analysis.entity.Status;
+import com.tjoeun.goldenstep.analysis.repository.AnalysisRunRepository;
 import com.tjoeun.goldenstep.global.exception.ErrorCode;
 import com.tjoeun.goldenstep.global.exception.RestException;
 import com.tjoeun.goldenstep.search.dto.request.ConditionStatus;
@@ -32,6 +35,7 @@ public class SearchSessionService {
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 	private final SearchSessionRepository searchSessionRepository;
+	private final AnalysisRunRepository analysisRunRepository;
 
 	@Transactional
 	public CreateResult create(CreateSearchSessionRequest request) {
@@ -53,8 +57,17 @@ public class SearchSessionService {
         );
 
 		SearchSession savedSession = searchSessionRepository.save(session);
+		
+		AnalysisRun run = new AnalysisRun(savedSession, now);
+	    AnalysisRun savedRun = analysisRunRepository.save(run);
 
-		return new CreateResult(savedSession.getId(), recoveryToken, savedSession.getExpiresAt());
+	    return new CreateResult(
+	            savedSession.getId(),
+	            savedRun.getId(),
+	            savedRun.getStatus(),
+	            recoveryToken,
+	            savedSession.getExpiresAt()
+	    );
 	}
 
 	private void validateLastSeenAt(LocalDateTime lastSeenAt, LocalDateTime now) {
@@ -128,15 +141,25 @@ public class SearchSessionService {
 	@Getter
 	public static class CreateResult {
 
-		private final Long sessionId;
-		private final String recoveryToken;
-		private final LocalDateTime expiresAt;
+	    private final Long sessionId;
+	    private final Long runId;
+	    private final Status status;
+	    private final String recoveryToken;
+	    private final LocalDateTime expiresAt;
 
-		public CreateResult(Long sessionId, String recoveryToken, LocalDateTime expiresAt) {
-			this.sessionId = sessionId;
-			this.recoveryToken = recoveryToken;
-			this.expiresAt = expiresAt;
-		}
+	    public CreateResult(
+	            Long sessionId,
+	            Long runId,
+	            Status status,
+	            String recoveryToken,
+	            LocalDateTime expiresAt
+	    ) {
+	        this.sessionId = sessionId;
+	        this.runId = runId;
+	        this.status = status;
+	        this.recoveryToken = recoveryToken;
+	        this.expiresAt = expiresAt;
+	    }
 	}
 	
 	public SearchSession restore(String recoveryToken) {
