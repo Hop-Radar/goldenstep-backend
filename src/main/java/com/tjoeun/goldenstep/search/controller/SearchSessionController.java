@@ -1,6 +1,8 @@
 package com.tjoeun.goldenstep.search.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.tjoeun.goldenstep.global.exception.ErrorResponse;
 import com.tjoeun.goldenstep.search.dto.request.CreateSearchSessionRequest;
 import com.tjoeun.goldenstep.search.dto.response.CreateSearchSessionResponse;
+import com.tjoeun.goldenstep.search.dto.response.CurrentSearchSessionResponse;
+import com.tjoeun.goldenstep.search.entity.SearchSession;
 import com.tjoeun.goldenstep.search.handler.SearchSessionCookieHandler;
 import com.tjoeun.goldenstep.search.service.SearchSessionService;
 import com.tjoeun.goldenstep.search.service.SearchSessionService.CreateResult;
@@ -80,5 +84,44 @@ public class SearchSessionController {
                 result.getSessionId(),
                 result.getExpiresAt()
         );
+    }
+    
+    @Operation(
+            summary = "현재 탐색 정보 조회",
+            description = """
+                    GOLDENSTEP_RECOVERY 쿠키로 유효한 탐색 세션을 찾고
+                    이전에 입력한 탐색 정보를 반환합니다.
+                    이 API는 새 분석을 시작하지 않습니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "탐색 정보 조회 성공",
+                    content = @Content(
+							schema = @Schema(implementation = CurrentSearchSessionResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "복구 쿠키가 없거나 연결된 탐색 세션이 없음",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "410",
+                    description = "탐색 세션의 24시간 보관 기간이 끝남",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    @GetMapping("/current")
+    public CurrentSearchSessionResponse getCurrent(
+			@CookieValue(name = "GOLDENSTEP_RECOVERY", required = false) String recoveryToken
+    ) {
+        SearchSession session = searchSessionService.restore(recoveryToken);
+        return new CurrentSearchSessionResponse(session);
     }
 }

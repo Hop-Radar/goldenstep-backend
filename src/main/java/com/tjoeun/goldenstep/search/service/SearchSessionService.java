@@ -138,4 +138,26 @@ public class SearchSessionService {
 			this.expiresAt = expiresAt;
 		}
 	}
+	
+	public SearchSession restore(String recoveryToken) {
+	    if (recoveryToken == null || recoveryToken.isBlank()) {
+	        throw new RestException(ErrorCode.RECOVERY_TOKEN_MISSING);
+	    }
+
+	    String tokenHash = sha256(recoveryToken);
+
+	    SearchSession session = searchSessionRepository
+	            .findByRecoveryTokenHash(tokenHash)
+	            .orElseThrow(() ->
+	                    new RestException(ErrorCode.SEARCH_SESSION_NOT_FOUND)
+	            );
+
+	    LocalDateTime now = LocalDateTime.now(SERVICE_ZONE);
+
+	    if (!session.getExpiresAt().isAfter(now)) {
+	        throw new RestException(ErrorCode.SEARCH_SESSION_EXPIRED);
+	    }
+
+	    return session;
+	}
 }
