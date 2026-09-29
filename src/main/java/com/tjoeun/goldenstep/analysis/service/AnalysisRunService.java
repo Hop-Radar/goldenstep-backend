@@ -24,12 +24,8 @@ public class AnalysisRunService {
 	public AnalysisStatusResponse getStatus(Long runId, String recoveryToken) {
 		SearchSession session = searchSessionService.restore(recoveryToken);
 
-		AnalysisRun run = analysisRunRepository.findById(runId)
+		AnalysisRun run = analysisRunRepository.findByIdAndSearchSession(runId, session)
 				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
-
-		if (!run.getSearchSession().getId().equals(session.getId())) {
-			throw new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND);
-		}
 
 		return new AnalysisStatusResponse(run);
 	}

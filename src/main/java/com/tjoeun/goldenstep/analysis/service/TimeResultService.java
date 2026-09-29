@@ -53,7 +53,7 @@ public class TimeResultService {
 
 		validatePlaces(places);
 
-		AnalysisRun run = analysisRunRepository.findById(runId)
+		AnalysisRun run = analysisRunRepository.findByIdForUpdate(runId)
 				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
 
 		if (timePoint == TimePoint.NOW && run.getStatus() != Status.PROCESSING) {
