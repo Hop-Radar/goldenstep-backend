@@ -35,7 +35,7 @@ public class PriorityPlace {
 	@Column(name = "priority_rank", nullable = false)
 	private Byte priorityRank;
 	
-	@Column(name = "name", nullable = false, length = 100)
+	@Column(name = "name", nullable = false, length = 150)
 	private String name;
 	
 	@Column(name = "address", length = 255)
@@ -49,4 +49,24 @@ public class PriorityPlace {
 
     @Column(name = "score", precision = 10, scale = 7)
     private BigDecimal score;
+    
+    public PriorityPlace(
+            TimeResult timeResult,
+            String poiId,
+            Byte priorityRank,
+            String name,
+            String address,
+            BigDecimal lat,
+            BigDecimal lng,
+            BigDecimal score
+    ) {
+        this.timeResult = timeResult;
+        this.poiId = poiId;
+        this.priorityRank = priorityRank;
+        this.name = name;
+        this.address = address;
+        this.lat = lat;
+        this.lng = lng;
+        this.score = score;
+    }
 }

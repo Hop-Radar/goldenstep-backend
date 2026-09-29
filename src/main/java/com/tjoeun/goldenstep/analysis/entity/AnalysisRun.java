@@ -48,4 +48,13 @@ public class AnalysisRun {
         this.requestedAt = requestedAt;
         this.status = Status.PROCESSING;
     }
+	
+	public void complete(LocalDateTime completedAt) {
+		if (this.status != Status.PROCESSING) {
+			throw new IllegalStateException("진행 중인 분석만 완료할 수 있습니다.");
+		}
+
+	    this.status = Status.COMPLETED;
+	    this.completedAt = completedAt;
+	}
 }

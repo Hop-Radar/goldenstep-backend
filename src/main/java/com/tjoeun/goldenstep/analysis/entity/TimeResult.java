@@ -48,4 +48,18 @@ public class TimeResult {
 	
 	@Column(name = "reliability_status", length = 30)
 	private String reliabilityStatus;
+	
+	public TimeResult(
+	        AnalysisRun analysisRun,
+	        TimePoint timePoint,
+	        LocalDateTime targetAt,
+	        Map<String, Object> boundaryZone,
+	        String reliabilityStatus
+	) {
+	    this.analysisRun = analysisRun;
+	    this.timePoint = timePoint;
+	    this.targetAt = targetAt;
+	    this.boundaryZone = boundaryZone;
+	    this.reliabilityStatus = reliabilityStatus;
+	}
 }
