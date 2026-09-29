@@ -13,6 +13,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.tjoeun.goldenstep.analysis.dto.response.TimeResultResponse;
 import com.tjoeun.goldenstep.analysis.entity.AnalysisRun;
 import com.tjoeun.goldenstep.analysis.entity.PriorityPlace;
 import com.tjoeun.goldenstep.analysis.entity.Status;
@@ -23,6 +24,8 @@ import com.tjoeun.goldenstep.analysis.repository.PriorityPlaceRepository;
 import com.tjoeun.goldenstep.analysis.repository.TimeResultRepository;
 import com.tjoeun.goldenstep.global.exception.ErrorCode;
 import com.tjoeun.goldenstep.global.exception.RestException;
+import com.tjoeun.goldenstep.search.entity.SearchSession;
+import com.tjoeun.goldenstep.search.service.SearchSessionService;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,8 @@ public class TimeResultService {
 	private final AnalysisRunRepository analysisRunRepository;
 	private final TimeResultRepository timeResultRepository;
 	private final PriorityPlaceRepository priorityPlaceRepository;
+	
+	private final SearchSessionService searchSessionService;
 
 	@Transactional
 	public Long saveResult(Long runId, TimePoint timePoint, LocalDateTime targetAt, Map<String, Object> boundaryZone,
@@ -142,5 +147,30 @@ public class TimeResultService {
 			this.lng = lng;
 			this.score = score;
 		}
+	}
+	
+	@Transactional(readOnly = true)
+	public TimeResultResponse getStoredResult(Long runId, String timePointValue, String recoveryToken) {
+	    TimePoint timePoint;
+
+	    try {
+	        timePoint = TimePoint.valueOf(timePointValue);
+	    } catch (IllegalArgumentException exception) {
+	        throw new RestException(ErrorCode.INVALID_TIME_POINT);
+	    }
+
+		SearchSession session = searchSessionService.restore(recoveryToken);
+
+	    AnalysisRun run = analysisRunRepository
+	            .findByIdAndSearchSession(runId, session)
+				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
+
+	    TimeResult result = timeResultRepository
+	            .findByAnalysisRunAndTimePoint(run, timePoint)
+				.orElseThrow(() -> new RestException(ErrorCode.TIME_RESULT_NOT_FOUND));
+
+		List<PriorityPlace> places = priorityPlaceRepository.findByTimeResultOrderByPriorityRankAsc(result);
+
+	    return new TimeResultResponse(result, places);
 	}
 }
