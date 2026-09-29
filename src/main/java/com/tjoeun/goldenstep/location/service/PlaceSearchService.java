@@ -46,25 +46,25 @@ public class PlaceSearchService {
     }
     public List<PlaceSearchResponse> search(String query) {
         if (query == null) {
-            throw new IllegalArgumentException("장소 검색어를 입력해주세요.");
+        	throw new RestException(ErrorCode.INVALID_PLACE_SEARCH_QUERY);
         }
 
         String keyword = query.trim();
 
         if (keyword.length() < 2 || keyword.length() > 100) {
-			throw new IllegalArgumentException("장소 검색어는 2자 이상 100자 이하로 입력해주세요.");
+        	throw new RestException(ErrorCode.INVALID_PLACE_SEARCH_QUERY);
         }
 
         try {
             ResponseEntity<String> response = restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/search/v1/local")
-                            .queryParam("query", keyword)
+                            .queryParam("query", "{keyword}")
                             .queryParam("display", 5)
                             .queryParam("start", 1)
                             .queryParam("sort", "random")
                             .queryParam("format", "json")
-                            .build())
+                            .build(keyword))
                     .retrieve()
                     .toEntity(String.class);
 

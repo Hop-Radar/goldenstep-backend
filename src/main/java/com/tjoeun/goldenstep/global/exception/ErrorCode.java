@@ -28,7 +28,8 @@ public enum ErrorCode {
 	TIME_RESULT_NOT_FOUND(404, "A003", "요청한 시간점의 분석 결과가 아직 저장되지 않았습니다."),
 	
 	// 네이버 검색 API 오류
-	PLACE_SEARCH_FAILED(502, "M001", "장소 검색 서비스에서 결과를 가져오지 못했습니다. 잠시 후 다시 시도해주세요."),;
+	PLACE_SEARCH_FAILED(502, "M001", "장소 검색 서비스에서 결과를 가져오지 못했습니다. 잠시 후 다시 시도해주세요."),
+	INVALID_PLACE_SEARCH_QUERY(400, "M002", "장소 검색어는 2자 이상 100자 이하로 입력해주세요."),;
 
 	private final int status;
 	private final String divisionCode;
