@@ -42,4 +42,10 @@ public class AnalysisRun {
 	
 	@Column(name = "completed_at")
 	private LocalDateTime completedAt;
+	
+	public AnalysisRun(SearchSession searchSession, LocalDateTime requestedAt) {
+        this.searchSession = searchSession;
+        this.requestedAt = requestedAt;
+        this.status = Status.PROCESSING;
+    }
 }

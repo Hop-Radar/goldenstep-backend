@@ -39,34 +39,40 @@ public class SearchSessionController {
     private final SearchSessionCookieHandler cookieHandler;
 
     @Operation(
-            summary = "탐색 정보 입력",
+            summary = "탐색 시작",
             description = """
-                    마지막 확인 위치·시각과 대상자 정보를 저장합니다.
+                    마지막 확인 위치·시각과 대상자 정보를 저장하고
+                    분석 실행을 PROCESSING 상태로 생성합니다.
                     성공하면 24시간 유효한 복구 토큰을 HttpOnly 쿠키로 발급합니다.
-                    이 요청은 분석을 시작하지 않습니다.
                     """
     )
     @ApiResponses({
-        @ApiResponse(
-                responseCode = "201",
-                description = "탐색 정보 저장 완료",
-					content = @Content(schema = @Schema(implementation = CreateSearchSessionResponse.class)),
-                headers = @Header(
-                        name = "Set-Cookie",
-                        description = "GOLDENSTEP_RECOVERY 복구 쿠키. HttpOnly, SameSite=Lax, Max-Age=86400"
-                )
-        ),
-        @ApiResponse(
-                responseCode = "400",
-                description = "입력값 누락, 형식 오류 또는 마지막 확인 시각 오류",
-					content = @Content(schema = @Schema(implementation = ErrorResponse.class))
-        ),
-        @ApiResponse(
-                responseCode = "500",
-                description = "서버 처리 오류",
-					content = @Content(schema = @Schema(implementation = ErrorResponse.class))
-        )
-})
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "탐색 세션과 분석 실행 생성 완료",
+                    content = @Content(
+							schema = @Schema(implementation = CreateSearchSessionResponse.class)
+                    ),
+                    headers = @Header(
+                            name = "Set-Cookie",
+                            description = "GOLDENSTEP_RECOVERY 복구 쿠키. HttpOnly, SameSite=Lax, Max-Age=86400"
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "입력값 누락, 형식 오류 또는 마지막 확인 시각 오류",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "서버 처리 오류",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
     @PostMapping("/input")
     @ResponseStatus(HttpStatus.CREATED)
     public CreateSearchSessionResponse create(
@@ -82,6 +88,8 @@ public class SearchSessionController {
 
         return new CreateSearchSessionResponse(
                 result.getSessionId(),
+                result.getRunId(),
+                result.getStatus(),
                 result.getExpiresAt()
         );
     }
