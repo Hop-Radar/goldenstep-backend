@@ -20,7 +20,12 @@ public enum ErrorCode {
 	// 탐색 세션 오류: 쿠키를 이용한 세션 조회 API에서 사용
 	RECOVERY_TOKEN_MISSING(401, "S005", "탐색 정보를 확인할 수 없습니다. 이 브라우저에서 탐색을 다시 시작해주세요."),
 	SEARCH_SESSION_NOT_FOUND(401, "S006", "이 브라우저에 연결된 탐색 정보를 찾을 수 없습니다. 탐색을 다시 시작해주세요."),
-	SEARCH_SESSION_EXPIRED(410, "S007", "탐색 정보의 보관 기간이 끝났습니다. 탐색을 다시 시작해주세요.");
+	SEARCH_SESSION_EXPIRED(410, "S007", "탐색 정보의 보관 기간이 끝났습니다. 탐색을 다시 시작해주세요."),
+	
+	// 분석 결과 오류
+	ANALYSIS_RUN_NOT_FOUND(404, "A001", "요청한 분석 실행을 찾을 수 없습니다."),
+	INVALID_TIME_POINT(400, "A002", "지원하지 않는 시간점입니다. NOW, AFTER_30M, AFTER_1H, AFTER_3H, AFTER_6H 중에서 선택해 주세요."),
+	TIME_RESULT_NOT_FOUND(404, "A003", "요청한 시간점의 분석 결과가 아직 저장되지 않았습니다."),;
 
 	private final int status;
 	private final String divisionCode;
