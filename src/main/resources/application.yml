@@ -18,3 +18,8 @@ spring:
 
 server:
   port: 8080
+
+naver:
+  api-hub:
+    client-id: ${NAVER_API_HUB_CLIENT_ID}
+    client-secret: ${NAVER_API_HUB_CLIENT_SECRET}
