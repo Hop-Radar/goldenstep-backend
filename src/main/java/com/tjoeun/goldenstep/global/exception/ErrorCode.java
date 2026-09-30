@@ -33,6 +33,7 @@ public enum ErrorCode {
 	INVALID_ANALYSIS_RESPONSE(502, "A012", "분석 서비스의 응답에 필요한 정보가 없거나 값이 올바르지 않습니다."),
 	INVALID_INITIAL_ANALYSIS_STATUS(409, "A013", "현재 시간점 분석은 진행 중인 분석 실행에서만 처리할 수 있습니다."),
 	INVALID_ANALYSIS_COMPLETION_TIME(500, "A014", "분석 종료 시각을 올바르게 설정하지 못했습니다."),
+	ANALYSIS_NOT_COMPLETED(409, "A015", "현재 시간점 분석이 완료된 후 다른 시간점의 분석을 요청해주세요."),
 	
 	// 네이버 검색 API 오류
 	PLACE_SEARCH_FAILED(502, "M001", "장소 검색 서비스에서 결과를 가져오지 못했습니다. 잠시 후 다시 시도해주세요."),

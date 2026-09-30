@@ -6,6 +6,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -39,6 +42,23 @@ public class AnalysisRunService {
 	private final SearchSessionService searchSessionService;
 	private final ReverseGeocodingService reverseGeocodingService;
 	private final TimeResultService timeResultService;
+	
+	private final ReentrantLock[] predictionLocks =
+	        IntStream.range(0, 64)
+	                .mapToObj(index -> new ReentrantLock())
+	                .toArray(ReentrantLock[]::new);
+	
+	private ReentrantLock predictionLock(Long runId, TimePoint timePoint) {
+		
+	    int hash = 31 * runId.hashCode() + timePoint.hashCode();
+
+	    int index = Math.floorMod(
+	            hash,
+	            predictionLocks.length
+	    );
+
+	    return predictionLocks[index];
+	}
 
 	@Transactional(readOnly = true)
 	public AnalysisStatusResponse getStatus(Long runId, String recoveryToken) {
@@ -73,9 +93,18 @@ public class AnalysisRunService {
 	
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public void executeInitialAnalysis(Long runId, AnalysisPredictionRequest request) {
-	    if (request == null) {
-			throw new RestException(ErrorCode.ANALYSIS_REQUEST_MISSING);
+	    validatePredictionRequest(runId, request);
+
+	    if (request.getTimePoint() != TimePoint.NOW) {
+			throw new RestException(ErrorCode.INVALID_INPUT);
 	    }
+
+	    executePrediction(runId, request);
+	}
+	
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public Long executePrediction(Long runId, AnalysisPredictionRequest request) {
+	    validatePredictionRequest(runId, request);
 
 		AnalysisPredictionResponse prediction = analysisClient.analyze(request);
 
@@ -114,14 +143,27 @@ public class AnalysisRunService {
 	        ));
 	    }
 
-	    timeResultService.saveResult(
+	    return timeResultService.saveResult(
 	            runId,
-	            TimePoint.NOW,
+	            request.getTimePoint(),
 	            request.getTargetAt(),
 	            prediction.getBoundaryZone(),
 	            prediction.getSummary().getReliabilityStatus(),
 	            places
 	    );
+	}
+	
+	private void validatePredictionRequest(Long runId, AnalysisPredictionRequest request) {
+	    if (request == null) {
+			throw new RestException(ErrorCode.ANALYSIS_REQUEST_MISSING);
+	    }
+
+	    if (runId == null
+	            || request.getTimePoint() == null
+	            || request.getTargetAt() == null) {
+
+			throw new RestException(ErrorCode.INVALID_INPUT);
+	    }
 	}
 	
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -145,5 +187,58 @@ public class AnalysisRunService {
 	    }
 
 	    run.fail(failedAt);
+	}
+	
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public Long getOrCreateTimePointResult(Long runId, String timePointValue, String recoveryToken) {
+	    if (runId == null) {
+	        throw new RestException(ErrorCode.INVALID_INPUT);
+	    }
+
+	    if (timePointValue == null || timePointValue.isBlank()) {
+	        throw new RestException(ErrorCode.INVALID_TIME_POINT);
+	    }
+
+	    TimePoint timePoint;
+
+	    try {
+	        timePoint = TimePoint.valueOf(timePointValue);
+	    } catch (IllegalArgumentException exception) {
+	        throw new RestException(ErrorCode.INVALID_TIME_POINT);
+	    }
+
+	    timeResultService.createTimePointPredictionRequest(
+	            recoveryToken,
+	            runId,
+	            timePoint
+	    );
+
+	    ReentrantLock lock = predictionLock(runId, timePoint);
+
+	    lock.lock();
+
+	    try {
+	        AnalysisPredictionRequest request =
+	                timeResultService.createTimePointPredictionRequest(
+	                        recoveryToken,
+	                        runId,
+	                        timePoint
+	                );
+
+	        Optional<Long> storedResultId =
+	                timeResultService.findStoredResultId(
+	                        runId,
+	                        timePoint
+	                );
+
+	        if (storedResultId.isPresent()) {
+	            return storedResultId.get();
+	        }
+
+	        return executePrediction(runId, request);
+
+	    } finally {
+	        lock.unlock();
+	    }
 	}
 }

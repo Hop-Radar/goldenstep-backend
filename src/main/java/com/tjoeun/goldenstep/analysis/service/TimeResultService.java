@@ -5,14 +5,17 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.tjoeun.goldenstep.ai.dto.request.AnalysisPredictionRequest;
 import com.tjoeun.goldenstep.analysis.dto.response.TimeResultResponse;
 import com.tjoeun.goldenstep.analysis.entity.AnalysisRun;
 import com.tjoeun.goldenstep.analysis.entity.PriorityPlace;
@@ -126,29 +129,19 @@ public class TimeResultService {
 		}
 	}
 
-	@Getter
-	public static class PriorityPlaceData {
+	@Transactional(readOnly = true)
+	public Optional<Long> findStoredResultId(
+	        Long runId,
+	        TimePoint timePoint
+	) {
+	    AnalysisRun run = analysisRunRepository.findById(runId)
+				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
 
-		private final String poiId;
-		private final Byte priorityRank;
-		private final String name;
-		private final String address;
-		private final BigDecimal lat;
-		private final BigDecimal lng;
-		private final BigDecimal score;
-
-		public PriorityPlaceData(String poiId, Byte priorityRank, String name, String address, BigDecimal lat,
-				BigDecimal lng, BigDecimal score) {
-			this.poiId = poiId;
-			this.priorityRank = priorityRank;
-			this.name = name;
-			this.address = address;
-			this.lat = lat;
-			this.lng = lng;
-			this.score = score;
-		}
+	    return timeResultRepository
+	            .findByAnalysisRunAndTimePoint(run, timePoint)
+	            .map(TimeResult::getId);
 	}
-	
+
 	@Transactional(readOnly = true)
 	public TimeResultResponse getStoredResult(Long runId, String timePointValue, String recoveryToken) {
 	    TimePoint timePoint;
@@ -172,5 +165,58 @@ public class TimeResultService {
 		List<PriorityPlace> places = priorityPlaceRepository.findByTimeResultOrderByPriorityRankAsc(result);
 
 	    return new TimeResultResponse(result, places);
+	}
+	
+	@Transactional(readOnly = true)
+	public AnalysisPredictionRequest createTimePointPredictionRequest(
+	        String recoveryToken,
+	        Long runId,
+	        TimePoint timePoint
+	) {
+	    if (runId == null || timePoint == null) {
+	        throw new RestException(ErrorCode.INVALID_INPUT);
+	    }
+
+		SearchSession session = searchSessionService.restore(recoveryToken);
+
+	    AnalysisRun run = analysisRunRepository
+	            .findByIdAndSearchSession(runId, session)
+				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
+
+	    if (run.getStatus() != Status.COMPLETED) {
+			throw new RestException(ErrorCode.ANALYSIS_NOT_COMPLETED);
+	    }
+
+	    return new AnalysisPredictionRequest(
+	            timePoint,
+	            timePoint.calculateTargetAt(run.getRequestedAt()),
+	            session.getLastLat(),
+	            session.getLastLng(),
+	            session.getLastSeenAt(),
+	            new HashMap<>(session.getPersonAttributes())
+	    );
+	}
+
+	@Getter
+	public static class PriorityPlaceData {
+		
+		private final String poiId;
+		private final Byte priorityRank;
+		private final String name;
+		private final String address;
+		private final BigDecimal lat;
+		private final BigDecimal lng;
+		private final BigDecimal score;
+		
+		public PriorityPlaceData(String poiId, Byte priorityRank, String name, String address, BigDecimal lat,
+				BigDecimal lng, BigDecimal score) {
+			this.poiId = poiId;
+			this.priorityRank = priorityRank;
+			this.name = name;
+			this.address = address;
+			this.lat = lat;
+			this.lng = lng;
+			this.score = score;
+		}
 	}
 }
