@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: ${CI_DB_URL:jdbc:mysql://localhost:3306/goldenstep_ci?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=Asia/Seoul}
+    username: ${CI_DB_USERNAME:goldenstep_ci}
+    password: ${CI_DB_PASSWORD:ci-test-password}
+
+  sql:
+    init:
+      mode: always
+
+goldenstep:
+  cookie:
+    secure: false
+
+  search:
+    cleanup:
+      enabled: false
+
+naver:
+  api-hub:
+    client-id: ci-test-client-id
+    client-secret: ci-test-client-secret
+
+  maps:
+    client-id: ci-test-client-id
+    client-secret: ci-test-client-secret

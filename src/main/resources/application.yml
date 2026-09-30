@@ -2,14 +2,8 @@ spring:
   application:
     name: goldenstep
 
-  datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-
-  sql:
-    init:
-      mode: always
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local,fastapi}
 
   jpa:
     hibernate:
@@ -20,22 +14,7 @@ server:
   port: 8080
 
 goldenstep:
-  cookie:
-    secure: false
-
   search:
     cleanup:
       initial-delay-ms: 60000
       fixed-delay-ms: 60000
-
-  ai:
-    base-url: ${AI_BASE_URL:http://localhost:8000}
-
-naver:
-  api-hub:
-    client-id: ${NAVER_API_HUB_CLIENT_ID}
-    client-secret: ${NAVER_API_HUB_CLIENT_SECRET}
-
-  maps:
-    client-id: ${NAVER_MAPS_CLIENT_ID}
-    client-secret: ${NAVER_MAPS_CLIENT_SECRET}
