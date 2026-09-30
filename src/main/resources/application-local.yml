@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  sql:
+    init:
+      mode: always
+
+goldenstep:
+  cookie:
+    secure: false
+
+  search:
+    cleanup:
+      enabled: true
+
+  ai:
+    base-url: ${AI_BASE_URL:http://localhost:8000}
+
+naver:
+  api-hub:
+    client-id: ${NAVER_API_HUB_CLIENT_ID}
+    client-secret: ${NAVER_API_HUB_CLIENT_SECRET}
+
+  maps:
+    client-id: ${NAVER_MAPS_CLIENT_ID}
+    client-secret: ${NAVER_MAPS_CLIENT_SECRET}

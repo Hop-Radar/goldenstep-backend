@@ -1,0 +1,78 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: goldenstep_ci
+          MYSQL_USER: goldenstep_ci
+          MYSQL_PASSWORD: ci-test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      TZ: Asia/Seoul
+      SPRING_PROFILES_ACTIVE: ci,mock
+      CI_DB_URL: jdbc:mysql://127.0.0.1:3306/goldenstep_ci?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=Asia/Seoul
+      CI_DB_USERNAME: goldenstep_ci
+      CI_DB_PASSWORD: ci-test-password
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Run tests and build executable JAR
+        run: ./gradlew clean test bootJar --no-daemon
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/test/
+            build/test-results/test/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload executable JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: build/libs/*.jar
+          retention-days: 7
+          if-no-files-found: error
