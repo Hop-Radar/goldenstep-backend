@@ -40,6 +40,10 @@ public enum ErrorCode {
 	INVALID_PLACE_SEARCH_QUERY(400, "M002", "장소 검색어는 2자 이상 100자 이하로 입력해주세요."),
 	ADDRESS_COORDINATES_MISSING(400, "M003", "주소 조회에 필요한 위도와 경도를 모두 입력해주세요."),
 	INVALID_ADDRESS_COORDINATES(400, "M004", "주소 조회 위도는 -90~90, 경도는 -180~180이어야 합니다."),
+	
+	// 추천 장소 상세 오류
+	INVALID_PLACE_ID(400, "P001", "추천 장소 ID는 1 이상의 정수여야 합니다."),
+	PRIORITY_PLACE_NOT_FOUND(404, "P002", "현재 탐색 세션에서 요청한 추천 장소를 찾을 수 없습니다."),
 	;
 
 	private final int status;

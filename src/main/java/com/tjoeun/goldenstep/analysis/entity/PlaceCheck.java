@@ -34,4 +34,8 @@ public class PlaceCheck {
     @CreationTimestamp
     @Column(name = "checked_at", nullable = false, updatable = false)
     private LocalDateTime checkedAt;
+    
+    public PlaceCheck(PriorityPlace priorityPlace) {
+        this.priorityPlace = priorityPlace;
+    }
 }
