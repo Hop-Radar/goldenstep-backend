@@ -18,11 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.tjoeun.goldenstep.ai.dto.request.AnalysisPredictionRequest;
 import com.tjoeun.goldenstep.analysis.dto.response.TimeResultResponse;
 import com.tjoeun.goldenstep.analysis.entity.AnalysisRun;
+import com.tjoeun.goldenstep.analysis.entity.PlaceCheck;
 import com.tjoeun.goldenstep.analysis.entity.PriorityPlace;
 import com.tjoeun.goldenstep.analysis.entity.Status;
 import com.tjoeun.goldenstep.analysis.entity.TimePoint;
 import com.tjoeun.goldenstep.analysis.entity.TimeResult;
 import com.tjoeun.goldenstep.analysis.repository.AnalysisRunRepository;
+import com.tjoeun.goldenstep.analysis.repository.PlaceCheckRepository;
 import com.tjoeun.goldenstep.analysis.repository.PriorityPlaceRepository;
 import com.tjoeun.goldenstep.analysis.repository.TimeResultRepository;
 import com.tjoeun.goldenstep.global.exception.ErrorCode;
@@ -40,7 +42,8 @@ public class TimeResultService {
 	private final AnalysisRunRepository analysisRunRepository;
 	private final TimeResultRepository timeResultRepository;
 	private final PriorityPlaceRepository priorityPlaceRepository;
-	
+	private final PlaceCheckRepository placeCheckRepository;
+
 	private final SearchSessionService searchSessionService;
 
 	@Transactional
@@ -85,11 +88,9 @@ public class TimeResultService {
 		priorityPlaceRepository.saveAll(priorityPlaces);
 
 		if (timePoint == TimePoint.NOW) {
-		    LocalDateTime completedAt = LocalDateTime.now(
-		            ZoneId.of("Asia/Seoul")
-		    ).truncatedTo(ChronoUnit.SECONDS);
+			LocalDateTime completedAt = LocalDateTime.now(ZoneId.of("Asia/Seoul")).truncatedTo(ChronoUnit.SECONDS);
 
-		    run.complete(completedAt);
+			run.complete(completedAt);
 		}
 
 		return savedResult.getId();
@@ -130,76 +131,78 @@ public class TimeResultService {
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<Long> findStoredResultId(
-	        Long runId,
-	        TimePoint timePoint
-	) {
-	    AnalysisRun run = analysisRunRepository.findById(runId)
+	public Optional<Long> findStoredResultId(Long runId, TimePoint timePoint) {
+		AnalysisRun run = analysisRunRepository.findById(runId)
 				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
 
-	    return timeResultRepository
-	            .findByAnalysisRunAndTimePoint(run, timePoint)
-	            .map(TimeResult::getId);
+		return timeResultRepository.findByAnalysisRunAndTimePoint(run, timePoint).map(TimeResult::getId);
 	}
 
 	@Transactional(readOnly = true)
 	public TimeResultResponse getStoredResult(Long runId, String timePointValue, String recoveryToken) {
-	    TimePoint timePoint;
+		TimePoint timePoint;
 
-	    try {
-	        timePoint = TimePoint.valueOf(timePointValue);
-	    } catch (IllegalArgumentException exception) {
-	        throw new RestException(ErrorCode.INVALID_TIME_POINT);
-	    }
+		try {
+			timePoint = TimePoint.valueOf(timePointValue);
+		} catch (IllegalArgumentException exception) {
+			throw new RestException(ErrorCode.INVALID_TIME_POINT);
+		}
 
 		SearchSession session = searchSessionService.restore(recoveryToken);
 
-	    AnalysisRun run = analysisRunRepository
-	            .findByIdAndSearchSession(runId, session)
+		AnalysisRun run = analysisRunRepository.findByIdAndSearchSession(runId, session)
 				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
 
-	    TimeResult result = timeResultRepository
-	            .findByAnalysisRunAndTimePoint(run, timePoint)
+		TimeResult result = timeResultRepository.findByAnalysisRunAndTimePoint(run, timePoint)
 				.orElseThrow(() -> new RestException(ErrorCode.TIME_RESULT_NOT_FOUND));
 
 		List<PriorityPlace> places = priorityPlaceRepository.findByTimeResultOrderByPriorityRankAsc(result);
 
-	    return new TimeResultResponse(result, places);
+		Map<Long, LocalDateTime> checkedAtByPlaceId = findCheckedAtByPlaceId(places);
+
+		return new TimeResultResponse(result, places, checkedAtByPlaceId);
 	}
-	
+
 	@Transactional(readOnly = true)
-	public AnalysisPredictionRequest createTimePointPredictionRequest(
-	        String recoveryToken,
-	        Long runId,
-	        TimePoint timePoint
-	) {
-	    if (runId == null || timePoint == null) {
-	        throw new RestException(ErrorCode.INVALID_INPUT);
-	    }
+	public AnalysisPredictionRequest createTimePointPredictionRequest(String recoveryToken, Long runId,
+			TimePoint timePoint) {
+		if (runId == null || timePoint == null) {
+			throw new RestException(ErrorCode.INVALID_INPUT);
+		}
 
 		SearchSession session = searchSessionService.restore(recoveryToken);
 
-	    AnalysisRun run = analysisRunRepository
-	            .findByIdAndSearchSession(runId, session)
+		AnalysisRun run = analysisRunRepository.findByIdAndSearchSession(runId, session)
 				.orElseThrow(() -> new RestException(ErrorCode.ANALYSIS_RUN_NOT_FOUND));
 
-	    if (run.getStatus() != Status.COMPLETED) {
+		if (run.getStatus() != Status.COMPLETED) {
 			throw new RestException(ErrorCode.ANALYSIS_NOT_COMPLETED);
-	    }
+		}
 
-	    return new AnalysisPredictionRequest(
-	            timePoint,
-	            timePoint.calculateTargetAt(run.getRequestedAt()),
-	            session.getLastLat(),
-	            session.getLastLng(),
-	            session.getLastSeenAt(),
-	            new HashMap<>(session.getPersonAttributes())
-	    );
+		return new AnalysisPredictionRequest(timePoint, timePoint.calculateTargetAt(run.getRequestedAt()),
+				session.getLastLat(), session.getLastLng(), session.getLastSeenAt(),
+				new HashMap<>(session.getPersonAttributes()));
+	}
+
+	private Map<Long, LocalDateTime> findCheckedAtByPlaceId(List<PriorityPlace> priorityPlaces) {
+		if (priorityPlaces.isEmpty()) {
+			return Map.of();
+		}
+
+		List<PlaceCheck> checks = placeCheckRepository.findByPriorityPlaceIn(priorityPlaces);
+
+		Map<Long, LocalDateTime> checkedAtByPlaceId = new HashMap<>();
+
+		for (PlaceCheck check : checks) {
+			checkedAtByPlaceId.put(check.getPriorityPlace().getId(), check.getCheckedAt());
+		}
+
+		return checkedAtByPlaceId;
 	}
 
 	@Getter
 	public static class PriorityPlaceData {
-		
+
 		private final String poiId;
 		private final Byte priorityRank;
 		private final String name;
@@ -207,7 +210,7 @@ public class TimeResultService {
 		private final BigDecimal lat;
 		private final BigDecimal lng;
 		private final BigDecimal score;
-		
+
 		public PriorityPlaceData(String poiId, Byte priorityRank, String name, String address, BigDecimal lat,
 				BigDecimal lng, BigDecimal score) {
 			this.poiId = poiId;
