@@ -34,6 +34,13 @@ public enum ErrorCode {
 	INVALID_INITIAL_ANALYSIS_STATUS(409, "A013", "현재 시간점 분석은 진행 중인 분석 실행에서만 처리할 수 있습니다."),
 	INVALID_ANALYSIS_COMPLETION_TIME(500, "A014", "분석 종료 시각을 올바르게 설정하지 못했습니다."),
 	ANALYSIS_NOT_COMPLETED(409, "A015", "현재 시간점 분석이 완료된 후 다른 시간점의 분석을 요청해주세요."),
+
+	// Fast API 연동 분석 요청 오류
+	INVALID_ANALYSIS_REQUEST(500, "A016", "AI 분석 요청을 구성하는 데 필요한 위치, 시각 또는 대상자 정보가 올바르지 않습니다."),
+	INVALID_ANALYSIS_ELAPSED_TIME(500, "A017", "AI 예측 대상 시각은 마지막 확인 시각보다 이후여야 합니다."),
+	AI_ANALYSIS_REQUEST_FAILED(502, "A018", "AI 분석 서버가 요청을 정상적으로 처리하지 못했습니다. 잠시 후 다시 시도해주세요."),
+	AI_ANALYSIS_CONNECTION_FAILED(503, "A019", "AI 분석 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
+	AI_ANALYSIS_TIMEOUT(504, "A020", "AI 분석 응답 대기 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."),
 	
 	// 네이버 검색 API 오류
 	PLACE_SEARCH_FAILED(502, "M001", "장소 검색 서비스에서 결과를 가져오지 못했습니다. 잠시 후 다시 시도해주세요."),
@@ -44,6 +51,7 @@ public enum ErrorCode {
 	// 추천 장소 상세 오류
 	INVALID_PLACE_ID(400, "P001", "추천 장소 ID는 1 이상의 정수여야 합니다."),
 	PRIORITY_PLACE_NOT_FOUND(404, "P002", "현재 탐색 세션에서 요청한 추천 장소를 찾을 수 없습니다."),
+	
 	;
 
 	private final int status;
