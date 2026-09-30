@@ -54,12 +54,13 @@ public class FastApiAnalysisClient implements AnalysisClient {
         this.requestMapper = requestMapper;
 
         HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(3))
                 .build();
 
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 
-        requestFactory.setReadTimeout(Duration.ofSeconds(60));
+        requestFactory.setReadTimeout(Duration.ofSeconds(180));
 
         this.restClient = restClientBuilder.clone()
                 .baseUrl(baseUrl)

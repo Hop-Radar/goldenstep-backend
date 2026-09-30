@@ -28,6 +28,9 @@ goldenstep:
       initial-delay-ms: 60000
       fixed-delay-ms: 60000
 
+  ai:
+    base-url: ${AI_BASE_URL:http://localhost:8000}
+
 naver:
   api-hub:
     client-id: ${NAVER_API_HUB_CLIENT_ID}
