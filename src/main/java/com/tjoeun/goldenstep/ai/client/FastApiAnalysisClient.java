@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
@@ -43,6 +44,7 @@ public class FastApiAnalysisClient implements AnalysisClient {
     private final JsonMapper jsonMapper;
     private final FastApiSearchRequestMapper requestMapper;
 
+    @Autowired
     public FastApiAnalysisClient(
             RestClient.Builder restClientBuilder,
             JsonMapper jsonMapper,
@@ -68,6 +70,12 @@ public class FastApiAnalysisClient implements AnalysisClient {
                 .build();
     }
 
+	FastApiAnalysisClient(RestClient restClient, JsonMapper jsonMapper, FastApiSearchRequestMapper requestMapper) {
+        this.restClient = restClient;
+        this.jsonMapper = jsonMapper;
+        this.requestMapper = requestMapper;
+    }
+    
     @Override
 	public AnalysisPredictionResponse analyze(AnalysisPredictionRequest request) {
 		FastApiSearchRequest apiRequest = requestMapper.map(request);
