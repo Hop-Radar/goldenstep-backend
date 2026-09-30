@@ -36,6 +36,8 @@ public class SearchSessionService {
 	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+	public static final int CLEANUP_BATCH_SIZE = 100;
+
 	private final SearchSessionRepository searchSessionRepository;
 	private final AnalysisRunRepository analysisRunRepository;
 	private final ApplicationEventPublisher eventPublisher;
@@ -190,5 +192,12 @@ public class SearchSessionService {
 	    }
 
 	    return session;
+	}
+	
+	@Transactional
+	public int deleteExpiredSessions() {
+		LocalDateTime now = LocalDateTime.now(SERVICE_ZONE).truncatedTo(ChronoUnit.SECONDS);
+
+		return searchSessionRepository.deleteExpiredSessions(now, CLEANUP_BATCH_SIZE);
 	}
 }
