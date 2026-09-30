@@ -39,11 +39,12 @@ public class SearchSessionController {
     private final SearchSessionCookieHandler cookieHandler;
 
     @Operation(
-            summary = "탐색 시작",
+            summary = "탐색 정보 입력 및 초기 분석 시작",
             description = """
-                    마지막 확인 위치·시각과 대상자 정보를 저장하고
-                    분석 실행을 PROCESSING 상태로 생성합니다.
+                    마지막 확인 위치·시각과 대상자 정보를 저장합니다.
                     성공하면 24시간 유효한 복구 토큰을 HttpOnly 쿠키로 발급합니다.
+                    입력 정보 저장이 완료된 뒤 현재 시간점 분석을 비동기로 시작합니다.
+                    응답의 runId로 분석 상태를 조회할 수 있습니다.
                     """
     )
     @ApiResponses({

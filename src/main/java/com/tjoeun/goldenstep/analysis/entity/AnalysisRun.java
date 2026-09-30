@@ -2,6 +2,8 @@ package com.tjoeun.goldenstep.analysis.entity;
 
 import java.time.LocalDateTime;
 
+import com.tjoeun.goldenstep.global.exception.ErrorCode;
+import com.tjoeun.goldenstep.global.exception.RestException;
 import com.tjoeun.goldenstep.search.entity.SearchSession;
 
 import jakarta.persistence.Column;
@@ -56,5 +58,18 @@ public class AnalysisRun {
 
 	    this.status = Status.COMPLETED;
 	    this.completedAt = completedAt;
+	}
+	
+	public void fail(LocalDateTime failedAt) {
+	    if (this.status != Status.PROCESSING) {
+			throw new RestException(ErrorCode.INVALID_INITIAL_ANALYSIS_STATUS);
+	    }
+
+	    if (failedAt == null || failedAt.isBefore(this.requestedAt)) {
+			throw new RestException(ErrorCode.INVALID_ANALYSIS_COMPLETION_TIME);
+	    }
+
+	    this.status = Status.FAILED;
+	    this.completedAt = failedAt;
 	}
 }

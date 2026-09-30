@@ -11,11 +11,13 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.tjoeun.goldenstep.analysis.entity.AnalysisRun;
 import com.tjoeun.goldenstep.analysis.entity.Status;
+import com.tjoeun.goldenstep.analysis.event.AnalysisRequestedEvent;
 import com.tjoeun.goldenstep.analysis.repository.AnalysisRunRepository;
 import com.tjoeun.goldenstep.global.exception.ErrorCode;
 import com.tjoeun.goldenstep.global.exception.RestException;
@@ -36,6 +38,7 @@ public class SearchSessionService {
 
 	private final SearchSessionRepository searchSessionRepository;
 	private final AnalysisRunRepository analysisRunRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Transactional
 	public CreateResult create(CreateSearchSessionRequest request) {
@@ -59,7 +62,12 @@ public class SearchSessionService {
 		SearchSession savedSession = searchSessionRepository.save(session);
 		
 		AnalysisRun run = new AnalysisRun(savedSession, now);
+		
 	    AnalysisRun savedRun = analysisRunRepository.save(run);
+	    
+	    eventPublisher.publishEvent(
+	            new AnalysisRequestedEvent(savedRun.getId())
+	    );
 
 	    return new CreateResult(
 	            savedSession.getId(),
