@@ -26,10 +26,16 @@ public enum ErrorCode {
 	ANALYSIS_RUN_NOT_FOUND(404, "A001", "요청한 분석 실행을 찾을 수 없습니다."),
 	INVALID_TIME_POINT(400, "A002", "지원하지 않는 시간점입니다. NOW, AFTER_30M, AFTER_1H, AFTER_3H, AFTER_6H 중에서 선택해 주세요."),
 	TIME_RESULT_NOT_FOUND(404, "A003", "요청한 시간점의 분석 결과가 아직 저장되지 않았습니다."),
+	ANALYSIS_REQUEST_MISSING(500, "A010", "분석 요청 정보를 구성하지 못했습니다."),
+	MOCK_ANALYSIS_RESPONSE_LOAD_FAILED(500, "A011", "개발용 분석 응답 파일을 읽지 못했습니다. 파일 위치와 JSON 형식을 확인해주세요."),
+	INVALID_ANALYSIS_RESPONSE(502, "A012", "분석 서비스의 응답에 필요한 정보가 없거나 값이 올바르지 않습니다."),
 	
 	// 네이버 검색 API 오류
 	PLACE_SEARCH_FAILED(502, "M001", "장소 검색 서비스에서 결과를 가져오지 못했습니다. 잠시 후 다시 시도해주세요."),
-	INVALID_PLACE_SEARCH_QUERY(400, "M002", "장소 검색어는 2자 이상 100자 이하로 입력해주세요."),;
+	INVALID_PLACE_SEARCH_QUERY(400, "M002", "장소 검색어는 2자 이상 100자 이하로 입력해주세요."),
+	ADDRESS_COORDINATES_MISSING(400, "M003", "주소 조회에 필요한 위도와 경도를 모두 입력해주세요."),
+	INVALID_ADDRESS_COORDINATES(400, "M004", "주소 조회 위도는 -90~90, 경도는 -180~180이어야 합니다."),
+	;
 
 	private final int status;
 	private final String divisionCode;

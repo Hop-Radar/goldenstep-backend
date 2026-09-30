@@ -14,10 +14,14 @@ import org.springframework.stereotype.Component;
 import com.tjoeun.goldenstep.ai.dto.request.AnalysisPredictionRequest;
 import com.tjoeun.goldenstep.ai.dto.response.AnalysisPredictionResponse;
 import com.tjoeun.goldenstep.ai.dto.response.AnalysisPredictionResponse.PriorityPoint;
+import com.tjoeun.goldenstep.global.exception.ErrorCode;
+import com.tjoeun.goldenstep.global.exception.RestException;
 
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
+@Slf4j
 @Component
 @Profile("mock")
 public class MockAnalysisClient implements AnalysisClient {
@@ -45,9 +49,9 @@ public class MockAnalysisClient implements AnalysisClient {
     public AnalysisPredictionResponse analyze(
             AnalysisPredictionRequest request
     ) {
-        if (request == null) {
-			throw new IllegalArgumentException("분석 요청 정보가 필요합니다.");
-        }
+    	if (request == null) {
+			throw new RestException(ErrorCode.ANALYSIS_REQUEST_MISSING);
+		}
 
         AnalysisPredictionResponse prediction;
 
@@ -60,7 +64,13 @@ public class MockAnalysisClient implements AnalysisClient {
             );
 
         } catch (IOException | JacksonException exception) {
-			throw new IllegalStateException("모의 분석 응답 파일을 읽지 못했습니다. 파일의 위치와 JSON 형식을 확인해주세요.", exception);
+            log.error(
+                    "개발용 분석 응답 파일을 읽지 못했습니다. 리소스: {}",
+                    responseResource.getDescription(),
+                    exception
+            );
+
+			throw new RestException(ErrorCode.MOCK_ANALYSIS_RESPONSE_LOAD_FAILED);
         }
 
         validateResponse(prediction);
@@ -138,9 +148,9 @@ public class MockAnalysisClient implements AnalysisClient {
         }
     }
 
-    private IllegalStateException invalidResponse(
-            String reason
-    ) {
-		return new IllegalStateException("모의 분석 응답이 올바르지 않습니다. " + reason);
+    private RestException invalidResponse(String reason) {
+        log.error("분석 응답 검증 실패: {}", reason);
+
+		return new RestException(ErrorCode.INVALID_ANALYSIS_RESPONSE);
     }
 }

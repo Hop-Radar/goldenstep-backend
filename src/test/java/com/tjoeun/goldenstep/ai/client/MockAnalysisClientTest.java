@@ -16,6 +16,8 @@ import com.tjoeun.goldenstep.ai.dto.request.AnalysisPredictionRequest;
 import com.tjoeun.goldenstep.ai.dto.response.AnalysisPredictionResponse;
 import com.tjoeun.goldenstep.ai.dto.response.AnalysisPredictionResponse.PriorityPoint;
 import com.tjoeun.goldenstep.analysis.entity.TimePoint;
+import com.tjoeun.goldenstep.global.exception.ErrorCode;
+import com.tjoeun.goldenstep.global.exception.RestException;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -113,18 +115,15 @@ class MockAnalysisClientTest {
                         )
                 );
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
+        RestException exception = assertThrows(
+                RestException.class,
                 () -> missingFileClient.analyze(createRequest())
         );
 
-        assertTrue(
-                exception.getMessage().contains(
-                        "모의 분석 응답 파일을 읽지 못했습니다."
-                )
+        assertEquals(
+                ErrorCode.MOCK_ANALYSIS_RESPONSE_LOAD_FAILED,
+                exception.getErrorCode()
         );
-
-        assertNotNull(exception.getCause());
     }
 
     @Test
@@ -148,17 +147,14 @@ class MockAnalysisClientTest {
                         )
                 );
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> invalidResponseClient.analyze(
-                        createRequest()
-                )
+        RestException exception = assertThrows(
+                RestException.class,
+                () -> invalidResponseClient.analyze(createRequest())
         );
 
-        assertTrue(
-                exception.getMessage().contains(
-                        "priority_points가 없습니다."
-                )
+        assertEquals(
+                ErrorCode.INVALID_ANALYSIS_RESPONSE,
+                exception.getErrorCode()
         );
     }
 
