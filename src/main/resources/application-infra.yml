@@ -19,9 +19,8 @@ goldenstep:
   ai:
     base-url: ${AI_BASE_URL}
 
-  goldenstep:
-    cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
 naver:
   api-hub:
