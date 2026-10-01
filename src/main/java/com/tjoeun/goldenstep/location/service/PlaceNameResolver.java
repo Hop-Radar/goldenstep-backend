@@ -119,10 +119,23 @@ public class PlaceNameResolver {
                 throw exception;
             }
 
-            log.warn(
-                    "건물명 조회 실패로 주소를 사용합니다. code={}",
-                    exception.getErrorCode().getDivisionCode()
-            );
+            Throwable cause = exception.getCause();
+
+            if (cause instanceof RestClientResponseException responseException) {
+                log.warn(
+                        "건물명 조회 실패로 주소를 사용합니다. code={}, httpStatus={}",
+                        exception.getErrorCode().getDivisionCode(),
+                        responseException.getStatusCode().value()
+                );
+            } else {
+                log.warn(
+                        "건물명 조회 실패로 주소를 사용합니다. code={}, causeType={}",
+                        exception.getErrorCode().getDivisionCode(),
+						cause == null ? "없음" : cause.getClass().getSimpleName()
+                );
+            }
+
+            log.debug("건물명 조회 실패 상세", exception);
 
             return normalizedAddress;
         }
@@ -164,11 +177,11 @@ public class PlaceNameResolver {
                     .body(String.class);
 
         } catch (RestClientResponseException exception) {
-			throw new RestException(ErrorCode.GEOCODING_REQUEST_FAILED);
+			throw new RestException(ErrorCode.GEOCODING_REQUEST_FAILED, exception);
 
-		} catch (RestClientException exception) {
-			throw new RestException(ErrorCode.GEOCODING_CONNECTION_FAILED);
-		}
+        } catch (RestClientException exception) {
+			throw new RestException(ErrorCode.GEOCODING_CONNECTION_FAILED, exception);
+        }
 
 		if (body == null || body.isBlank()) {
 			throw new RestException(ErrorCode.INVALID_GEOCODING_RESPONSE);
@@ -179,7 +192,7 @@ public class PlaceNameResolver {
         try {
             root = jsonMapper.readTree(body);
         } catch (JacksonException exception) {
-			throw new RestException(ErrorCode.INVALID_GEOCODING_RESPONSE);
+			throw new RestException(ErrorCode.INVALID_GEOCODING_RESPONSE, exception);
         }
 
         if (root == null || !root.isObject()) {
@@ -229,7 +242,7 @@ public class PlaceNameResolver {
 
 			String buildingName = element.path("longName").asString("").strip();
 
-            if (!isUnknownName(buildingName)) {
+            if (!isUnknownName(buildingName) && buildingName.length() <= 255) {
                 return buildingName;
             }
         }

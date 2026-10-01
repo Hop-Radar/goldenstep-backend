@@ -161,9 +161,8 @@ public class FastApiAnalysisClient implements AnalysisClient {
             );
 
             log.debug(
-                    "[FastAPI 요청 JSON] requestId={}\n{}",
-                    requestId,
-                    requestBody
+                    "[FastAPI 요청 JSON] requestId={}",
+                    requestId
             );
 
             stage = "HTTP_RESPONSE_RECEIVE";

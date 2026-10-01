@@ -11,6 +11,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import com.tjoeun.goldenstep.global.dto.response.HealthResponse;
 
@@ -92,10 +93,20 @@ public class HealthService {
             return unavailable();
 
         } catch (RestClientException | JacksonException exception) {
-            log.debug(
-                    "FastAPI 상태 확인 실패: {}",
-                    exception.getMessage()
-            );
+        	if (exception instanceof RestClientResponseException responseException) {
+                log.info(
+                        "FastAPI 상태 확인 실패: type={}, httpStatus={}",
+                        exception.getClass().getSimpleName(),
+                        responseException.getStatusCode().value()
+                );
+            } else {
+                log.info(
+                        "FastAPI 상태 확인 실패: type={}",
+                        exception.getClass().getSimpleName()
+                );
+            }
+
+            log.debug("FastAPI 상태 확인 실패 상세", exception);
 
             return unavailable();
         }
