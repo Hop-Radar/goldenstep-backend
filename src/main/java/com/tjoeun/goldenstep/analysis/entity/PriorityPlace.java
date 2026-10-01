@@ -35,7 +35,7 @@ public class PriorityPlace {
 	@Column(name = "priority_rank", nullable = false)
 	private Byte priorityRank;
 	
-	@Column(name = "name", nullable = false, length = 150)
+	@Column(name = "name", nullable = false, length = 255)
 	private String name;
 	
 	@Column(name = "address", length = 255)

@@ -361,8 +361,6 @@ public class FastApiAnalysisClient implements AnalysisClient {
                     || point.getRank() == null
                     || point.getPoiId() == null
                     || point.getPoiId().isBlank()
-                    || point.getName() == null
-                    || point.getName().isBlank()
                     || point.getLocation() == null
                     || point.getLocation().getLat() == null
                     || point.getLocation().getLon() == null) {
@@ -394,7 +392,9 @@ public class FastApiAnalysisClient implements AnalysisClient {
             }
 
             if (point.getPoiId().length() > 100
-                    || point.getName().length() > 150) {
+                    || (point.getName() != null
+                        && point.getName().length() > 150)) {
+
                 throw invalidResponse(
                         requestId,
                         "추천 장소 식별자 또는 이름이 저장 가능한 길이를 초과합니다."
