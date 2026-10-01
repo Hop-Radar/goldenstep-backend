@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS `priority_place` (
     `priority_rank` TINYINT NOT NULL
         COMMENT '추천 순위',
 
-    `name` VARCHAR(150) NOT NULL
+    `name` VARCHAR(255) NOT NULL
         COMMENT '장소명',
 
     `address` VARCHAR(255) NULL DEFAULT NULL

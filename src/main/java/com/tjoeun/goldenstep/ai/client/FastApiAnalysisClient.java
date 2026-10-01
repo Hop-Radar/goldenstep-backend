@@ -1,17 +1,19 @@
 package com.tjoeun.goldenstep.ai.client;
 
 import java.math.BigDecimal;
+import java.net.SocketTimeoutException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
-import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
@@ -37,6 +39,10 @@ import tools.jackson.databind.json.JsonMapper;
 public class FastApiAnalysisClient implements AnalysisClient {
 
 	private static final String SEARCH_PATH = "/api/v1/simulation/search";
+    private static final String HEALTH_PATH = "/health";
+    private static final Integer CONNECT_TIMEOUT = 3;
+    private static final Integer READ_TIMEOUT = 180;
+
 	private static final BigDecimal MAX_LAT = BigDecimal.valueOf(90);
 	private static final BigDecimal MAX_LNG = BigDecimal.valueOf(180);
 
@@ -57,41 +63,142 @@ public class FastApiAnalysisClient implements AnalysisClient {
 
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(3))
+                .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT))
                 .build();
 
-		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        JdkClientHttpRequestFactory requestFactory =
+                new JdkClientHttpRequestFactory(httpClient);
 
-        requestFactory.setReadTimeout(Duration.ofSeconds(180));
+        requestFactory.setReadTimeout(Duration.ofSeconds(READ_TIMEOUT));
 
         this.restClient = restClientBuilder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
+
+        log.info(
+				"[FastAPI 설정] baseUrl={}, connectTimeout={}초, " + "readTimeout={}초",
+				baseUrl, CONNECT_TIMEOUT, READ_TIMEOUT
+        );
     }
 
-	FastApiAnalysisClient(RestClient restClient, JsonMapper jsonMapper, FastApiSearchRequestMapper requestMapper) {
+    FastApiAnalysisClient(
+            RestClient restClient,
+            JsonMapper jsonMapper,
+            FastApiSearchRequestMapper requestMapper
+    ) {
         this.restClient = restClient;
         this.jsonMapper = jsonMapper;
         this.requestMapper = requestMapper;
     }
-    
-    @Override
-	public AnalysisPredictionResponse analyze(AnalysisPredictionRequest request) {
-		FastApiSearchRequest apiRequest = requestMapper.map(request);
 
-        String requestId = apiRequest.getRequestId();
+    public void checkConnection() {
+        long startedAt = System.nanoTime();
+
+        log.info(
+                "[FastAPI 연결 확인 시작] method=GET, path={}",
+                HEALTH_PATH
+        );
 
         try {
-			String requestBody = jsonMapper.writeValueAsString(apiRequest);
+            ResponseEntity<String> response = restClient.get()
+                    .uri(HEALTH_PATH)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .toEntity(String.class);
 
-            String responseBody = restClient.post()
+            log.info(
+                    "[FastAPI 연결 확인 성공] status={}, elapsedMs={}",
+                    response.getStatusCode().value(),
+                    elapsedMillis(startedAt)
+            );
+
+            log.debug(
+                    "[FastAPI Health 응답]\n{}",
+                    response.getBody()
+            );
+
+        } catch (RestClientResponseException exception) {
+            log.warn(
+                    "[FastAPI 연결됨 / Health HTTP 오류] "
+                            + "status={}, elapsedMs={}, body={}",
+                    exception.getStatusCode().value(),
+                    elapsedMillis(startedAt),
+                    exception.getResponseBodyAsString()
+            );
+
+        } catch (RestClientException exception) {
+            log.warn(
+                    "[FastAPI 연결 확인 실패] elapsedMs={}, cause={}",
+                    elapsedMillis(startedAt),
+                    rootCauseDescription(exception),
+                    exception
+            );
+        }
+    }
+
+    @Override
+    public AnalysisPredictionResponse analyze(
+            AnalysisPredictionRequest request
+    ) {
+        FastApiSearchRequest apiRequest = requestMapper.map(request);
+        String requestId = apiRequest.getRequestId();
+
+        long startedAt = System.nanoTime();
+
+        String stage = "REQUEST_SERIALIZATION";
+
+        try {
+            String requestBody =
+                    jsonMapper.writeValueAsString(apiRequest);
+
+            log.info(
+                    "[FastAPI 요청 준비] requestId={}, timePoint={}, "
+                            + "elapsedHours={}",
+                    requestId,
+                    request.getTimePoint(),
+                    apiRequest.getMissingPerson().getElapsedHours()
+            );
+
+            log.debug(
+                    "[FastAPI 요청 JSON] requestId={}",
+                    requestId
+            );
+
+            stage = "HTTP_RESPONSE_RECEIVE";
+
+            log.info(
+                    "[FastAPI POST 시작] requestId={}, path={}",
+                    requestId,
+                    SEARCH_PATH
+            );
+
+            ResponseEntity<String> httpResponse = restClient.post()
                     .uri(SEARCH_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .body(requestBody)
                     .retrieve()
-                    .body(String.class);
+                    .toEntity(String.class);
+
+            String responseBody = httpResponse.getBody();
+
+            log.info(
+                    "[FastAPI 응답 수신 완료] requestId={}, "
+                            + "status={}, contentType={}, "
+                            + "bodyChars={}, elapsedMs={}",
+                    requestId,
+                    httpResponse.getStatusCode().value(),
+                    httpResponse.getHeaders().getContentType(),
+                    responseBody == null ? 0 : responseBody.length(),
+                    elapsedMillis(startedAt)
+            );
+
+            log.debug(
+                    "[FastAPI 응답 JSON] requestId={}\n{}",
+                    requestId,
+                    responseBody
+            );
 
             if (responseBody == null || responseBody.isBlank()) {
                 throw invalidResponse(
@@ -100,67 +207,111 @@ public class FastApiAnalysisClient implements AnalysisClient {
                 );
             }
 
+            stage = "RESPONSE_DESERIALIZATION";
+            long parsingStartedAt = System.nanoTime();
+
+            log.info(
+                    "[FastAPI DTO 변환 시작] requestId={}",
+                    requestId
+            );
+
             AnalysisPredictionResponse response =
                     jsonMapper.readValue(
                             responseBody,
                             AnalysisPredictionResponse.class
                     );
 
+            log.info(
+                    "[FastAPI DTO 변환 완료] requestId={}, elapsedMs={}",
+                    requestId,
+                    elapsedMillis(parsingStartedAt)
+            );
+
+            stage = "RESPONSE_VALIDATION";
             validateResponse(response, requestId);
 
             log.info(
-                    "FastAPI 분석 요청 완료: requestId={}, timePoint={}",
+                    "[FastAPI 분석 요청 완료] requestId={}, "
+                            + "timePoint={}, reliability={}, "
+                            + "placeCount={}, totalElapsedMs={}",
                     requestId,
-                    request.getTimePoint()
+                    request.getTimePoint(),
+                    response.getSummary().getReliabilityStatus(),
+                    response.getPriorityPoints().size(),
+                    elapsedMillis(startedAt)
             );
 
             return response;
 
         } catch (RestClientResponseException exception) {
             log.error(
-                    "FastAPI 분석 HTTP 오류: requestId={}, status={}",
+                    "[FastAPI HTTP 오류 응답 수신] requestId={}, "
+                            + "stage={}, status={}, elapsedMs={}",
                     requestId,
-                    exception.getStatusCode()
-            );
-
-			throw new RestException(ErrorCode.AI_ANALYSIS_REQUEST_FAILED);
-
-        } catch (ResourceAccessException exception) {
-            if (isTimeout(exception)) {
-                log.error(
-                        "FastAPI 분석 응답 시간 초과: requestId={}",
-                        requestId,
-                        exception
-                );
-
-				throw new RestException(ErrorCode.AI_ANALYSIS_TIMEOUT);
-            }
-
-            log.error(
-                    "FastAPI 분석 서버 연결 실패: requestId={}",
-                    requestId,
+                    stage,
+                    exception.getStatusCode().value(),
+                    elapsedMillis(startedAt),
                     exception
             );
 
-			throw new RestException(ErrorCode.AI_ANALYSIS_CONNECTION_FAILED);
+            log.debug(
+                    "[FastAPI 오류 응답 JSON] requestId={}\n{}",
+                    requestId,
+                    exception.getResponseBodyAsString()
+            );
+
+            throw new RestException(
+                    ErrorCode.AI_ANALYSIS_REQUEST_FAILED
+            );
+
+        } catch (ResourceAccessException exception) {
+            boolean timeout = isTimeout(exception);
+
+            log.error(
+                    "[FastAPI 통신 실패] requestId={}, stage={}, "
+                            + "timeout={}, elapsedMs={}, cause={}",
+                    requestId,
+                    stage,
+                    timeout,
+                    elapsedMillis(startedAt),
+                    rootCauseDescription(exception),
+                    exception
+            );
+
+            throw new RestException(
+                    timeout
+                            ? ErrorCode.AI_ANALYSIS_TIMEOUT
+                            : ErrorCode.AI_ANALYSIS_CONNECTION_FAILED
+            );
 
         } catch (JacksonException exception) {
             log.error(
-                    "FastAPI 분석 JSON 변환 실패: requestId={}",
+                    "[FastAPI JSON 처리 실패] requestId={}, "
+                            + "stage={}, elapsedMs={}",
                     requestId,
+                    stage,
+                    elapsedMillis(startedAt),
                     exception
             );
 
-			throw new RestException(ErrorCode.INVALID_ANALYSIS_RESPONSE);
+            throw new RestException(
+                    ErrorCode.INVALID_ANALYSIS_RESPONSE
+            );
 
         } catch (RestClientException exception) {
             log.error(
-                    "FastAPI 분석 통신 처리 실패: requestId={}",
+                    "[FastAPI HTTP 처리 실패] requestId={}, "
+                            + "stage={}, elapsedMs={}, cause={}",
                     requestId,
+                    stage,
+                    elapsedMillis(startedAt),
+                    rootCauseDescription(exception),
                     exception
             );
 
-			throw new RestException(ErrorCode.AI_ANALYSIS_REQUEST_FAILED);
+            throw new RestException(
+                    ErrorCode.AI_ANALYSIS_REQUEST_FAILED
+            );
         }
     }
 
@@ -169,10 +320,7 @@ public class FastApiAnalysisClient implements AnalysisClient {
             String requestId
     ) {
         if (response == null) {
-            throw invalidResponse(
-                    requestId,
-                    "분석 결과가 없습니다."
-            );
+            throw invalidResponse(requestId, "분석 결과가 없습니다.");
         }
 
         if (!"SUCCESS".equals(response.getStatus())) {
@@ -184,7 +332,8 @@ public class FastApiAnalysisClient implements AnalysisClient {
 
         if (response.getSummary() == null
                 || response.getSummary().getReliabilityStatus() == null
-                || response.getSummary().getReliabilityStatus().isBlank()) {
+                || response.getSummary()
+                        .getReliabilityStatus().isBlank()) {
             throw invalidResponse(
                     requestId,
                     "분석 신뢰도 정보가 없습니다."
@@ -192,10 +341,7 @@ public class FastApiAnalysisClient implements AnalysisClient {
         }
 
         if (response.getBoundaryZone() == null) {
-            throw invalidResponse(
-                    requestId,
-                    "예측 영역이 없습니다."
-            );
+            throw invalidResponse(requestId, "예측 영역이 없습니다.");
         }
 
         if (response.getPriorityPoints() == null
@@ -214,8 +360,6 @@ public class FastApiAnalysisClient implements AnalysisClient {
                     || point.getRank() == null
                     || point.getPoiId() == null
                     || point.getPoiId().isBlank()
-                    || point.getName() == null
-                    || point.getName().isBlank()
                     || point.getLocation() == null
                     || point.getLocation().getLat() == null
                     || point.getLocation().getLon() == null) {
@@ -247,7 +391,9 @@ public class FastApiAnalysisClient implements AnalysisClient {
             }
 
             if (point.getPoiId().length() > 100
-                    || point.getName().length() > 150) {
+                    || (point.getName() != null
+                        && point.getName().length() > 150)) {
+
                 throw invalidResponse(
                         requestId,
                         "추천 장소 식별자 또는 이름이 저장 가능한 길이를 초과합니다."
@@ -256,14 +402,19 @@ public class FastApiAnalysisClient implements AnalysisClient {
         }
     }
 
-	private RestException invalidResponse(String requestId, String reason) {
+    private RestException invalidResponse(
+            String requestId,
+            String reason
+    ) {
         log.error(
-                "FastAPI 분석 응답 검증 실패: requestId={}, reason={}",
+                "[FastAPI 응답 검증 실패] requestId={}, reason={}",
                 requestId,
                 reason
         );
 
-		return new RestException(ErrorCode.INVALID_ANALYSIS_RESPONSE);
+        return new RestException(
+                ErrorCode.INVALID_ANALYSIS_RESPONSE
+        );
     }
 
     private boolean isTimeout(Throwable exception) {
@@ -285,5 +436,25 @@ public class FastApiAnalysisClient implements AnalysisClient {
         }
 
         return false;
+    }
+
+    private static long elapsedMillis(long startedAt) {
+        return TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - startedAt
+        );
+    }
+
+    private static String rootCauseDescription(
+            Throwable exception
+    ) {
+        Throwable cause = exception;
+
+        while (cause.getCause() != null
+                && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+
+        return cause.getClass().getName()
+                + ": " + cause.getMessage();
     }
 }

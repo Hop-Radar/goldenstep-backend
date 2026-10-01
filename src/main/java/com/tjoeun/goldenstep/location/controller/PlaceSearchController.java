@@ -11,8 +11,10 @@ import com.tjoeun.goldenstep.location.dto.response.PlaceSearchResponse;
 import com.tjoeun.goldenstep.location.service.PlaceSearchService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "장소명 검색", description = "장소명 기준 후보 검색 API")
 @RestController
 @RequestMapping("/api/maps")
 @RequiredArgsConstructor

@@ -27,8 +27,15 @@ public class PriorityPlaceResponse {
     private final Byte priorityRank;
 
     @Schema(
-            description = "장소명",
-            example = "시청역 1호선 5번 출구 앞"
+            description = """
+                    추천 장소명.
+                    FastAPI 이름이 내부 식별자 또는 미상 값이면
+                    네이버 Geocoding의 BUILDING_NAME longName으로 보정합니다.
+                    건물명 조회 실패 시 주소를 사용하며,
+                    주소도 없으면 좌표를 표시합니다.
+                    """,
+            example = "신세계백화점",
+            maxLength = 255
     )
     private final String name;
 

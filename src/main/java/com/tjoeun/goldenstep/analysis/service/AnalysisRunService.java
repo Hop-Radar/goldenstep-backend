@@ -26,6 +26,7 @@ import com.tjoeun.goldenstep.analysis.repository.AnalysisRunRepository;
 import com.tjoeun.goldenstep.analysis.service.TimeResultService.PriorityPlaceData;
 import com.tjoeun.goldenstep.global.exception.ErrorCode;
 import com.tjoeun.goldenstep.global.exception.RestException;
+import com.tjoeun.goldenstep.location.service.PlaceNameResolver;
 import com.tjoeun.goldenstep.location.service.ReverseGeocodingService;
 import com.tjoeun.goldenstep.search.entity.SearchSession;
 import com.tjoeun.goldenstep.search.service.SearchSessionService;
@@ -42,6 +43,7 @@ public class AnalysisRunService {
 	private final SearchSessionService searchSessionService;
 	private final ReverseGeocodingService reverseGeocodingService;
 	private final TimeResultService timeResultService;
+	private final PlaceNameResolver placeNameResolver;
 	
 	private final ReentrantLock[] predictionLocks =
 	        IntStream.range(0, 64)
@@ -132,10 +134,17 @@ public class AnalysisRunService {
 	                point.getLocation().getLon()
 	        );
 
+	        String resolvedName = placeNameResolver.resolve(
+	                point.getName(),
+	                address,
+	                point.getLocation().getLat(),
+	                point.getLocation().getLon()
+	        );
+
 	        places.add(new PriorityPlaceData(
 	                point.getPoiId(),
 	                point.getRank(),
-	                point.getName(),
+	                resolvedName,
 	                address,
 	                point.getLocation().getLat(),
 	                point.getLocation().getLon(),
