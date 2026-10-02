@@ -3,8 +3,11 @@ import argparse
 import base64
 import json
 from pathlib import Path
+import re
 import shlex
 import subprocess
+
+AWS_DEPLOYMENT_REGION = "ap-northeast-2"
 
 
 def install_command(path, content, mode="600"):
@@ -15,15 +18,34 @@ def install_command(path, content, mode="600"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", required=True)
-    parser.add_argument("--region", default="ap-northeast-2")
+    parser.add_argument("--region", default=AWS_DEPLOYMENT_REGION,
+                        choices=[AWS_DEPLOYMENT_REGION])
     parser.add_argument("--backend-image", required=True)
     parser.add_argument("--frontend-image", required=True)
     parser.add_argument("--algorithm-image", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    for value in (args.backend_image, args.frontend_image, args.algorithm_image):
-        if any(c.isspace() for c in value) or "@" in value or ":" not in value:
-            parser.error("Use an ECR image URI with a tag and no whitespace")
+    # Derive the trusted account from the selected AWS profile, never from
+    # image arguments. This local read does not issue an ECR login token.
+    identity = subprocess.run([
+        "aws", "sts", "get-caller-identity", "--profile", args.profile,
+        "--region", args.region, "--output", "json",
+    ], check=True, capture_output=True, text=True)
+    account = json.loads(identity.stdout).get("Account", "")
+    if not isinstance(account, str) or not re.fullmatch(r"[0-9]{12}", account):
+        parser.error("AWS STS returned an invalid account ID")
+    registry = f"{account}.dkr.ecr.{args.region}.amazonaws.com"
+
+    # Validate before CloudFormation access or payload generation. Never send
+    # an ECR token to a registry derived from untrusted image arguments.
+    for option, value, repository in (
+        ("--backend-image", args.backend_image, "goldenstep-backend"),
+        ("--frontend-image", args.frontend_image, "goldenstep-frontend"),
+        ("--algorithm-image", args.algorithm_image, "goldenstep-ai"),
+    ):
+        expected = f"{registry}/{repository}:"
+        if not re.fullmatch(re.escape(expected) + r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", value):
+            parser.error(f"{option} must use {expected}<valid Docker tag>")
     result = subprocess.run([
         "aws", "cloudformation", "describe-stacks", "--stack-name", "goldenstep-service",
         "--profile", args.profile, "--region", args.region, "--output", "json",
@@ -100,14 +122,10 @@ except Exception:
         ("/opt/goldenstep/prepare-environment.py", remote_python),
     ]:
         commands.append(install_command(path, content))
-    registry = args.backend_image.split("/")[0]
-    if any(image.split("/")[0] != registry for image in
-           (args.frontend_image, args.algorithm_image)):
-        parser.error("All images must use the same ECR registry")
     commands += ["python3 /opt/goldenstep/prepare-environment.py",
         "cd /opt/goldenstep",
         "docker compose --env-file .env.prod -f compose.prod.yaml config --quiet",
-        f"aws ecr get-login-password --region {shlex.quote(args.region)} | docker login --username AWS --password-stdin {shlex.quote(registry)}",
+        f"aws ecr get-login-password --region {shlex.quote(args.region)} | docker login --username AWS --password-stdin {registry}",
         "docker compose --env-file .env.prod -f compose.prod.yaml pull --quiet",
         "echo 'Deployment preparation: SUCCESS'"]
     script = "\n".join(commands) + "\n"
