@@ -7,6 +7,11 @@ Parameters:
     Default: goldenstep
     AllowedPattern: '^[a-z][a-z0-9-]{2,30}$'
 
+  ModelAssetsBucketName:
+    Type: String
+    Default: goldenstep-model-assets
+    Description: Globally unique S3 bucket name for graph and POI model assets.
+
   ExistingGitHubOidcProviderArn:
     Type: String
     Default: ''
@@ -206,6 +211,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      BucketName: !Ref ModelAssetsBucketName
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

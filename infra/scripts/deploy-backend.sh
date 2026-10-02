@@ -3,14 +3,14 @@ set -Eeuo pipefail
 umask 077
 
 DEPLOY_DIR="/opt/goldenstep"
-COMPOSE_FILE="$DEPLOY_DIR/infra/compose.prod.yaml"
+COMPOSE_FILE="$DEPLOY_DIR/compose.prod.yaml"
 ENV_FILE="$DEPLOY_DIR/.env.prod"
 NEW_IMAGE="${1:?Usage: deploy-backend.sh <ECR image URI>}"
 AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 
-# Expect a private ECR image tagged with a full Git commit SHA.
-if [[ ! "$NEW_IMAGE" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9_-]+:([a-f0-9]{40}|[a-f0-9]{64})$ ]]; then
-  echo "Invalid ECR image URI or Git commit SHA tag." >&2
+# CI uses a full Git SHA; manual builds add a UTC identifier for local changes.
+if [[ ! "$NEW_IMAGE" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9_-]+:([a-f0-9]{40}|[a-f0-9]{64})(-manual-[0-9]{8}T[0-9]{6}Z)?$ ]]; then
+  echo "Invalid ECR image URI or Git SHA/manual build tag." >&2
   exit 1
 fi
 
