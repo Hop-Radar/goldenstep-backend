@@ -39,3 +39,8 @@ out/
 ### .env ###
 .env
 .env.*
+!.env.prod.example
+
+### Actual deployment environment files ###
+infra/.env.prod
+infra/backend.env
