@@ -14,6 +14,7 @@ Parameters:
 
   Ec2InstanceType:
     Type: String
+    Default: m7i.large
     Description: EC2 instance type selected for deployment
     AllowedPattern: '^[a-z0-9]+\.[a-z0-9]+$'
     ConstraintDescription: Enter a valid EC2 instance type.
@@ -24,13 +25,14 @@ Parameters:
 
   RootVolumeSize:
     Type: Number
-    Default: 80
+    Default: 30
     MinValue: 30
 
   DatabaseInstanceClass:
     Type: String
-    Default: db.t4g.small
+    Default: db.t4g.micro
     AllowedValues:
+      - db.t4g.micro
       - db.t4g.small
       - db.t4g.medium
 
@@ -90,7 +92,7 @@ Resources:
       AllowMajorVersionUpgrade: false
       EngineLifecycleSupport: open-source-rds-extended-support-disabled
 
-      BackupRetentionPeriod: 0
+      BackupRetentionPeriod: 7
       DeletionProtection: true
 
       Tags:
@@ -220,7 +222,7 @@ Resources:
       MetadataOptions:
         HttpEndpoint: enabled
         HttpTokens: required
-        HttpPutResponseHopLimit: 1
+        HttpPutResponseHopLimit: 2
 
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -240,6 +242,21 @@ Resources:
 
           systemctl enable --now docker
           systemctl enable --now amazon-ssm-agent
+
+          # Reserve 4 GiB of swap for temporary memory pressure.
+          if [ ! -f /swapfile ]; then
+            (umask 077; dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none)
+            chmod 0600 /swapfile
+            mkswap /swapfile
+          fi
+          if ! swapon --show=NAME --noheadings | grep -Fxq /swapfile; then
+            swapon /swapfile
+          fi
+          if ! grep -Eq '^/swapfile[[:space:]]' /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          fi
+          echo 'vm.swappiness=10' > /etc/sysctl.d/99-goldenstep-swap.conf
+          sysctl -p /etc/sysctl.d/99-goldenstep-swap.conf
 
           install -d -m 0755 /opt/goldenstep
           install -d -m 0755 /opt/goldenstep/infra

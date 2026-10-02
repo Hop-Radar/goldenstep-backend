@@ -12,6 +12,11 @@ services:
     container_name: gs-frontend-web
     restart: unless-stopped
 
+    env_file:
+      - path: ${FRONTEND_ENV_FILE:?FRONTEND_ENV_FILE is required}
+        required: true
+        format: raw
+
     ports:
       - "80:80"
       - "443:443"
@@ -55,6 +60,7 @@ services:
 
     environment:
       SPRING_PROFILES_ACTIVE: infra,fastapi
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m
       AI_BASE_URL: http://algorithm:8000
       TZ: Asia/Seoul
 
