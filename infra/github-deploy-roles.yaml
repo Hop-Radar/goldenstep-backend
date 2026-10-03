@@ -1,0 +1,261 @@
+# Separate stack: IAM roles only; account IDs and instance IDs come from CloudFormation.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Goldenstep repository-scoped GitHub OIDC deployment roles (no application resource updates)"
+Parameters:
+  FoundationStackName:
+    Type: "String"
+    Default: "goldenstep-foundation"
+  ServiceStackName:
+    Type: "String"
+    Default: "goldenstep-service"
+  BackendOidcSubject:
+    Type: "String"
+    Description: "Exact GitHub OIDC subject for Hop-Radar/goldenstep-backend main (legacy or immutable format)."
+    AllowedPattern: "^repo:Hop-Radar(@[0-9]+)?/goldenstep-backend(@[0-9]+)?:ref:refs/heads/main$"
+  FrontendOidcSubject:
+    Type: "String"
+    Description: "Exact GitHub OIDC subject for Hop-Radar/goldenstep-frontend main (legacy or immutable format)."
+    AllowedPattern: "^repo:Hop-Radar(@[0-9]+)?/goldenstep-frontend(@[0-9]+)?:ref:refs/heads/main$"
+  AlgorithmOidcSubject:
+    Type: "String"
+    Description: "Exact GitHub OIDC subject for Hop-Radar/goldenstep-algorithm main (legacy or immutable format)."
+    AllowedPattern: "^repo:Hop-Radar(@[0-9]+)?/goldenstep-algorithm(@[0-9]+)?:ref:refs/heads/main$"
+Resources:
+  BackendDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "goldenstep-github-backend-deploy"
+      Description: "GitHub main deployment for goldenstep-backend; ECR push and one SSM target."
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Federated:
+                Fn::ImportValue:
+                  Fn::Sub: "${FoundationStackName}-GitHubOidcProviderArn"
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: "sts.amazonaws.com"
+                token.actions.githubusercontent.com:sub:
+                  Ref: "BackendOidcSubject"
+      Policies:
+        -
+          PolicyName: "GoldenstepDeployment"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Sid: "EcrAuthentication"
+                Effect: "Allow"
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+              -
+                Sid: "PushOwnRepository"
+                Effect: "Allow"
+                Action:
+                  - "ecr:ListImages"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:PutImage"
+                Resource:
+                  Fn::Sub: "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/goldenstep-backend"
+              -
+                Sid: "SendDeploymentToAppInstance"
+                Effect: "Allow"
+                Action:
+                  - "ssm:SendCommand"
+                Resource:
+                  -
+                    Fn::Sub:
+                      - "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}"
+                      -
+                        InstanceId:
+                          Fn::ImportValue:
+                            Fn::Sub: "${ServiceStackName}-AppInstanceId"
+                  -
+                    Fn::Sub: "arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript"
+              -
+                Sid: "ReadCommandResult"
+                Effect: "Allow"
+                Action:
+                  - "ssm:GetCommandInvocation"
+                Resource: "*"
+      Tags:
+        -
+          Key: "Project"
+          Value: "goldenstep"
+        -
+          Key: "Component"
+          Value: "backend"
+  FrontendDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "goldenstep-github-frontend-deploy"
+      Description: "GitHub main deployment for goldenstep-frontend; ECR push and one SSM target."
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Federated:
+                Fn::ImportValue:
+                  Fn::Sub: "${FoundationStackName}-GitHubOidcProviderArn"
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: "sts.amazonaws.com"
+                token.actions.githubusercontent.com:sub:
+                  Ref: "FrontendOidcSubject"
+      Policies:
+        -
+          PolicyName: "GoldenstepDeployment"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Sid: "EcrAuthentication"
+                Effect: "Allow"
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+              -
+                Sid: "PushOwnRepository"
+                Effect: "Allow"
+                Action:
+                  - "ecr:ListImages"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:PutImage"
+                Resource:
+                  Fn::Sub: "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/goldenstep-frontend"
+              -
+                Sid: "SendDeploymentToAppInstance"
+                Effect: "Allow"
+                Action:
+                  - "ssm:SendCommand"
+                Resource:
+                  -
+                    Fn::Sub:
+                      - "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}"
+                      -
+                        InstanceId:
+                          Fn::ImportValue:
+                            Fn::Sub: "${ServiceStackName}-AppInstanceId"
+                  -
+                    Fn::Sub: "arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript"
+              -
+                Sid: "ReadCommandResult"
+                Effect: "Allow"
+                Action:
+                  - "ssm:GetCommandInvocation"
+                Resource: "*"
+      Tags:
+        -
+          Key: "Project"
+          Value: "goldenstep"
+        -
+          Key: "Component"
+          Value: "frontend"
+  AlgorithmDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "goldenstep-github-ai-deploy"
+      Description: "GitHub main deployment for goldenstep-ai; ECR push and one SSM target."
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Federated:
+                Fn::ImportValue:
+                  Fn::Sub: "${FoundationStackName}-GitHubOidcProviderArn"
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: "sts.amazonaws.com"
+                token.actions.githubusercontent.com:sub:
+                  Ref: "AlgorithmOidcSubject"
+      Policies:
+        -
+          PolicyName: "GoldenstepDeployment"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Sid: "EcrAuthentication"
+                Effect: "Allow"
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+              -
+                Sid: "PushOwnRepository"
+                Effect: "Allow"
+                Action:
+                  - "ecr:ListImages"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:PutImage"
+                Resource:
+                  Fn::Sub: "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/goldenstep-ai"
+              -
+                Sid: "SendDeploymentToAppInstance"
+                Effect: "Allow"
+                Action:
+                  - "ssm:SendCommand"
+                Resource:
+                  -
+                    Fn::Sub:
+                      - "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}"
+                      -
+                        InstanceId:
+                          Fn::ImportValue:
+                            Fn::Sub: "${ServiceStackName}-AppInstanceId"
+                  -
+                    Fn::Sub: "arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript"
+              -
+                Sid: "ReadCommandResult"
+                Effect: "Allow"
+                Action:
+                  - "ssm:GetCommandInvocation"
+                Resource: "*"
+      Tags:
+        -
+          Key: "Project"
+          Value: "goldenstep"
+        -
+          Key: "Component"
+          Value: "ai"
+Outputs:
+  BackendDeployRoleArn:
+    Description: "GitHub AWS_ROLE_ARN for the backend repository"
+    Value:
+      Fn::GetAtt:
+        - "BackendDeployRole"
+        - "Arn"
+  FrontendDeployRoleArn:
+    Description: "GitHub AWS_ROLE_ARN for the frontend repository"
+    Value:
+      Fn::GetAtt:
+        - "FrontendDeployRole"
+        - "Arn"
+  AlgorithmDeployRoleArn:
+    Description: "GitHub AWS_ROLE_ARN for the algorithm repository"
+    Value:
+      Fn::GetAtt:
+        - "AlgorithmDeployRole"
+        - "Arn"

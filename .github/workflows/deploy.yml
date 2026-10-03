@@ -1,0 +1,312 @@
+name: Backend CD
+
+# Only a push to main triggers CD (including a merged PR).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: goldenstep-backend-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+  SERVICE_URL: ${{ vars.SERVICE_URL || 'https://www.goldenstep.site' }}
+  AWS_PAGER: ''
+  SERVICE: backend
+  ECR_REPOSITORY: goldenstep-backend
+
+jobs:
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: goldenstep_ci
+          MYSQL_USER: goldenstep_ci
+          MYSQL_PASSWORD: ci-test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout main commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Test and build JAR
+        env:
+          SPRING_PROFILES_ACTIVE: ci,mock
+          CI_DB_URL: jdbc:mysql://127.0.0.1:3306/goldenstep_ci?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=Asia/Seoul
+          CI_DB_USERNAME: goldenstep_ci
+          CI_DB_PASSWORD: ci-test-password
+        run: |
+          python3 -m unittest discover -s infra/scripts/tests -v
+          bash ./gradlew clean test bootJar --no-daemon
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cd-test-reports
+          path: |
+            build/reports/tests/test/
+            build/test-results/test/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Validate AWS settings
+        run: |
+          test -n "$AWS_REGION" || { echo 'Set repository variable AWS_REGION'; exit 1; }
+          test -n "$AWS_ROLE_ARN" || { echo 'Set repository variable AWS_ROLE_ARN'; exit 1; }
+          test -n "$EC2_INSTANCE_ID" || { echo 'Set repository variable EC2_INSTANCE_ID'; exit 1; }
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: goldenstep-${{ github.run_id }}
+
+      - name: Build and push immutable image
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
+          REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin "$REGISTRY"
+          EXISTS=$(aws ecr list-images --repository-name "$ECR_REPOSITORY" \
+            --filter tagStatus=TAGGED \
+            --query "imageIds[?imageTag=='$GITHUB_SHA'] | length(@)" --output text)
+          if [[ "$EXISTS" == 0 ]]; then
+            docker build --platform linux/amd64 --tag "$IMAGE" .
+            docker push "$IMAGE"
+          else
+            echo 'Reusing the existing immutable image for this commit'
+          fi
+          printf 'DEPLOY_IMAGE=%s\n' "$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Check latest main commit
+        run: |
+          LATEST_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          [[ "$LATEST_SHA" == "$GITHUB_SHA" ]] || {
+            echo 'A newer main commit exists; this deployment is superseded'
+            exit 1
+          }
+
+      # Image builds can be slow; refresh the one-hour session before polling SSM.
+      - name: Refresh AWS credentials for deployment
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: goldenstep-deploy-${{ github.run_id }}
+
+      - name: Deploy this service through SSM
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import re
+          import shlex
+          import subprocess
+          import time
+          from urllib.parse import urlparse
+
+          service = os.environ["SERVICE"]
+          image = os.environ["DEPLOY_IMAGE"]
+          region = os.environ["AWS_REGION"]
+          instance = os.environ["EC2_INSTANCE_ID"]
+          url = urlparse(os.environ["SERVICE_URL"])
+          if (url.scheme != "https" or not url.hostname
+                  or not re.fullmatch(r"[a-z0-9.-]+", url.hostname)
+                  or url.netloc != url.hostname or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("SERVICE_URL must be an HTTPS origin without credentials or port")
+          if not re.fullmatch(r"i-[0-9a-f]{8,17}", instance):
+              raise SystemExit("Invalid EC2_INSTANCE_ID")
+
+          remote_script = r"""
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          umask 077
+          SERVICE="${1:?service required}"
+          NEW_IMAGE="${2:?image required}"
+          AWS_REGION="${3:?region required}"
+          DOMAIN="${4:?domain required}"
+          DEPLOY_DIR=/opt/goldenstep
+          ENV_FILE="$DEPLOY_DIR/.env.prod"
+          COMPOSE_FILE="$DEPLOY_DIR/compose.prod.yaml"
+          case "$SERVICE" in
+            backend) IMAGE_KEY=BACKEND_IMAGE; REPOSITORY=goldenstep-backend ;;
+            frontend) IMAGE_KEY=FRONTEND_IMAGE; REPOSITORY=goldenstep-frontend ;;
+            algorithm) IMAGE_KEY=ALGORITHM_IMAGE; REPOSITORY=goldenstep-ai ;;
+            *) echo 'Unsupported service' >&2; exit 1 ;;
+          esac
+          for tool in aws docker jq flock curl awk; do command -v "$tool" >/dev/null; done
+          [[ -f "$ENV_FILE" && -f "$COMPOSE_FILE" ]]
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text --region "$AWS_REGION")
+          [[ "$ACCOUNT" =~ ^[0-9]{12}$ ]]
+          REGISTRY="$ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com"
+          [[ "$NEW_IMAGE" == "$REGISTRY/$REPOSITORY:"* ]]
+          TAG="${NEW_IMAGE##*:}"
+          [[ "$TAG" =~ ^[a-f0-9]{40}$ ]]
+          # This host lock serializes deployments from all three GitHub repositories.
+          exec 9>"$DEPLOY_DIR/.deployment.lock"
+          flock -w 600 9 || { echo 'Deployment lock timeout' >&2; exit 1; }
+          unset BACKEND_IMAGE FRONTEND_IMAGE ALGORITHM_IMAGE
+          compose() { docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
+          compose config --quiet
+          ENTRY_COUNT=$(awk -v key="$IMAGE_KEY" 'index($0,key "=")==1 {n++} END {print n+0}' "$ENV_FILE")
+          [[ "$ENTRY_COUNT" == 1 ]]
+          OLD_IMAGE=$(awk -v key="$IMAGE_KEY" 'index($0,key "=")==1 {print substr($0,length(key)+2)}' "$ENV_FILE")
+          [[ "${OLD_IMAGE%:*}" == "$REGISTRY/$REPOSITORY" ]]
+          CONTAINER_ID=$(compose ps -q "$SERVICE")
+          [[ -n "$CONTAINER_ID" ]]
+          [[ "$(docker inspect --format '{{.Config.Image}}' "$CONTAINER_ID")" == "$OLD_IMAGE" ]]
+          check_stack() {
+            local response code
+            if [[ "$SERVICE" == algorithm ]]; then
+              local ai_id
+              ai_id=$(compose ps -q algorithm) || return 1
+              [[ -n "$ai_id" ]] || return 1
+              [[ "$(docker inspect --format '{{.State.Health.Status}}' "$ai_id")" == healthy ]] || return 1
+            fi
+            code=$(curl --silent --show-error --max-time 8 --resolve "$DOMAIN:443:127.0.0.1" \
+              -o /dev/null -w '%{http_code}' "https://$DOMAIN/") || return 1
+            [[ "$code" == 200 ]] || return 1
+            response=$(curl --fail --silent --show-error --max-time 8 \
+              --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health") || return 1
+            jq -e '.ready == true and .status == "UP" and .spring == "UP" and .fastApi == "UP"' \
+              >/dev/null <<< "$response"
+          }
+          reload_nginx() {
+            compose exec -T frontend nginx -t && compose exec -T frontend nginx -s reload
+          }
+          wait_ready() {
+            local deadline=$((SECONDS + 600))
+            while (( SECONDS < deadline )); do
+              # A replaced backend gets a new Docker IP; refresh the Nginx upstream.
+              if [[ "$SERVICE" != backend ]] || reload_nginx >/dev/null 2>&1; then
+                if check_stack >/dev/null 2>&1; then return 0; fi
+              fi
+              sleep 5
+            done
+            return 1
+          }
+          check_stack || { echo 'Current stack is unhealthy; deployment cancelled' >&2; exit 1; }
+          if [[ "$NEW_IMAGE" == "$OLD_IMAGE" ]]; then
+            echo "$SERVICE already uses the requested healthy image"; exit 0
+          fi
+          # The login destination comes from the EC2 role identity, not the image input.
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin "$REGISTRY"
+          docker pull "$NEW_IMAGE"
+          BACKUP_FILE=$(mktemp "$DEPLOY_DIR/.env.prod.backup.XXXXXX")
+          NEXT_FILE=$(mktemp "$DEPLOY_DIR/.env.prod.next.XXXXXX")
+          cp "$ENV_FILE" "$BACKUP_FILE"
+          CHANGED=0
+          cleanup() {
+            local exit_code=$?
+            trap - EXIT
+            set +e
+            if [[ "$exit_code" -ne 0 && "$CHANGED" == 1 ]]; then
+              echo "Deployment failed; restoring $SERVICE" >&2
+              cp "$BACKUP_FILE" "$ENV_FILE"
+              if compose up -d --no-deps --pull never "$SERVICE" && wait_ready; then
+                echo 'Previous image restored' >&2
+              else
+                echo 'Rollback failed; manual inspection required' >&2
+              fi
+            fi
+            rm -f "$BACKUP_FILE" "$NEXT_FILE"
+            exit "$exit_code"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          awk -v key="$IMAGE_KEY" -v image="$NEW_IMAGE" '
+            index($0,key "=")==1 {print key "=" image; next} {print}
+          ' "$ENV_FILE" > "$NEXT_FILE"
+          CHANGED=1
+          mv "$NEXT_FILE" "$ENV_FILE"
+          compose config --quiet
+          compose up -d --no-deps --pull never "$SERVICE"
+          wait_ready || { echo 'Readiness check failed' >&2; exit 1; }
+          compose ps "$SERVICE"
+          echo "$SERVICE deployment: SUCCESS"
+          """
+
+          encoded = base64.b64encode(remote_script.encode()).decode()
+          arguments = " ".join(shlex.quote(value) for value in (service, image, region, url.hostname))
+          command = ("set -eu\numask 077\n"
+              "deploy_script=$(mktemp /tmp/goldenstep-cd.XXXXXX)\n"
+              "trap 'rm -f \"$deploy_script\"' EXIT\n"
+              f"printf %s {encoded} | base64 -d > \"$deploy_script\"\n"
+              f"bash \"$deploy_script\" {arguments}\n")
+          # Values are JSON-encoded, not interpolated into a JSON shell literal.
+          with open("ssm-parameters.json", "w", encoding="utf-8") as output:
+              json.dump({"commands": [command], "executionTimeout": ["2400"]}, output)
+
+          def aws(*arguments):
+              result = subprocess.run(["aws", *arguments, "--region", region, "--output", "json"],
+                                      check=True, capture_output=True, text=True)
+              return json.loads(result.stdout)
+
+          sent = aws("ssm", "send-command", "--instance-ids", instance,
+              "--document-name", "AWS-RunShellScript", "--parameters", "file://ssm-parameters.json",
+              "--timeout-seconds", "600", "--comment", f"GitHub {service} {os.environ['GITHUB_SHA']}")
+          command_id = sent["Command"]["CommandId"]
+          print("SSM Command ID:", command_id, flush=True)
+          deadline = time.monotonic() + 3100
+          while time.monotonic() < deadline:
+              try:
+                  result = aws("ssm", "get-command-invocation", "--command-id", command_id,
+                               "--instance-id", instance)
+              except subprocess.CalledProcessError as error:
+                  if "InvocationDoesNotExist" in (error.stderr or ""):
+                      time.sleep(5)
+                      continue
+                  raise
+              status = result["Status"]
+              if status in ("Pending", "InProgress", "Delayed", "Cancelling"):
+                  time.sleep(10)
+                  continue
+              print(result.get("StandardOutputContent", ""))
+              print(result.get("StandardErrorContent", ""))
+              if status != "Success":
+                  raise SystemExit("SSM deployment failed: " + status)
+              break
+          else:
+              raise SystemExit("SSM polling timed out; inspect command " + command_id)
+          PY
