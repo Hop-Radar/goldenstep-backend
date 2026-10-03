@@ -35,3 +35,17 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### .env ###
+.env
+.env.*
+!.env.prod.example
+
+### Actual deployment environment files ###
+infra/.env.prod
+infra/backend.env
+infra/frontend.env
+
+### Python deployment tools ###
+__pycache__/
+*.py[cod]

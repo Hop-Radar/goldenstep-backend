@@ -1,0 +1,115 @@
+{
+  "status": "SUCCESS",
+  "request_id": "req_20260925_001",
+  "timestamp": "2026-09-25T14:30:02.150+09:00",
+  "execution_time_sec": 2.15,
+  "summary": {
+    "person_type": "DEMENTIA",
+    "base_velocity_kmh": 2.4,
+    "elapsed_hours": 1.5,
+    "max_distance_m": 3600.0,
+    "reliability_status": "STABLE",
+    "reliability_warning": null,
+    "area_reduction_rate": 74.2
+  },
+  "boundary_zone": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "zone_type": "ISOCHRONE_POLYGON",
+          "elapsed_hours": 1.5,
+          "fill_color": "#2563EB",
+          "fill_opacity": 0.25
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [126.977969, 37.566535],
+              [126.983210, 37.569420],
+              [126.987540, 37.565110],
+              [126.985120, 37.560240],
+              [126.974310, 37.559810],
+              [126.971250, 37.564120],
+              [126.977969, 37.566535]
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "priority_points": [
+    {
+      "rank": 1,
+      "poi_id": "poi_001",
+      "name": "시청역 1호선 5번 출구 앞",
+      "category": "SUBWAY_STATION",
+      "location": {
+        "lat": 37.565812,
+        "lon": 126.977234
+      },
+      "score": 0.892,
+      "recommendation_reason": "대로변 보행 흐름의 주요 결절점이며 치매 노인 직진성 동선과 강력 일치",
+      "deep_links": {
+        "naver_map": "nmap://route/walk?dlat=37.565812&dlng=126.977234&dname=%EC%8B%9C%EC%B2%AD%EC%97%AD%205%EB%B2%88%EC%B6%9C%EA%B5%AC",
+        "kakao_map": "kakaomap://route?ep=37.565812,126.977234&by=FOOT"
+      }
+    },
+    {
+      "rank": 2,
+      "poi_id": "poi_002",
+      "name": "GS25 세종대로점",
+      "category": "CONVENIENCE_STORE",
+      "location": {
+        "lat": 37.568102,
+        "lon": 126.976841
+      },
+      "score": 0.785,
+      "recommendation_reason": "넓은 도로변 24시 조명 시설로 인지 유인 및 임시 쉼터 체류 가능성 높음",
+      "deep_links": {
+        "naver_map": "nmap://route/walk?dlat=37.568102&dlng=126.976841&dname=GS25%20%EC%84%B8%EC%82%AC%EB%8C%80%EB%A1%9C%EC%A0%90",
+        "kakao_map": "kakaomap://route?ep=37.568102,126.976841&by=FOOT"
+      }
+    },
+    {
+      "rank": 3,
+      "poi_id": "poi_003",
+      "name": "서울광장 북측 쉼터 벤치 구역",
+      "category": "PARK_REST_AREA",
+      "location": {
+        "lat": 37.567015,
+        "lon": 126.978512
+      },
+      "score": 0.724,
+      "recommendation_reason": "개방된 평지 보행로 내 주요 벤치 설치 구역으로 보행 지연(체류) 유력 지점",
+      "deep_links": {
+        "naver_map": "nmap://route/walk?dlat=37.567015&dlng=126.978512&dname=%EC%84%9C%EC%9A%B8%EA%B4%91%EC%9E%A5%20%EB%B6%81%EC%88%A1%EC%89%BC%ED%84%B0",
+        "kakao_map": "kakaomap://route?ep=37.567015,126.978512&by=FOOT"
+      }
+    }
+  ],
+  "high_probability_edges": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "edge_id": "edge_1001",
+          "street_name": "세종대로",
+          "highway_type": "primary",
+          "probability": 0.84,
+          "search_priority": "CRITICAL"
+        },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [126.977969, 37.566535],
+            [126.976841, 37.568102]
+          ]
+        }
+      }
+    ]
+  }
+}

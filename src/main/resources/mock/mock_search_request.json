@@ -1,0 +1,18 @@
+{
+  "request_id": "req_20260925_001",
+  "missing_person": {
+    "person_type": "DEMENTIA",
+    "last_seen_location": {
+      "lat": 37.566535,
+      "lon": 126.977969,
+      "address": "서울특별시 중구 태평로1가 31 (서울시청 앞)"
+    },
+    "last_seen_time": "2026-09-25T14:30:00+09:00",
+    "elapsed_hours": 1.5
+  },
+  "parameters": {
+    "num_agents": 2000,
+    "search_radius_m": 3500.0,
+    "fallback_level": "PLAN_A"
+  }
+}

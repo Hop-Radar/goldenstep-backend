@@ -1,12 +1,3 @@
-DROP TABLE IF EXISTS `place_check`;
-DROP TABLE IF EXISTS `priority_place`;
-DROP TABLE IF EXISTS `time_result`;
-DROP TABLE IF EXISTS `analysis_run`;
-DROP TABLE IF EXISTS `snapshot_place`;
-DROP TABLE IF EXISTS `snapshot`;
-DROP TABLE IF EXISTS `search_session`;
-
-
 CREATE TABLE IF NOT EXISTS `search_session` (
     `id` BIGINT NOT NULL AUTO_INCREMENT
         COMMENT '탐색 세션 ID',
@@ -151,7 +142,7 @@ CREATE TABLE IF NOT EXISTS `priority_place` (
     `priority_rank` TINYINT NOT NULL
         COMMENT '추천 순위',
 
-    `name` VARCHAR(150) NOT NULL
+    `name` VARCHAR(255) NOT NULL
         COMMENT '장소명',
 
     `address` VARCHAR(255) NULL DEFAULT NULL

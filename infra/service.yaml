@@ -1,0 +1,315 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Goldenstep EC2 application host, RDS and secrets
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: goldenstep
+    AllowedPattern: '^[a-z][a-z0-9-]{2,30}$'
+
+  FoundationStackName:
+    Type: String
+    Default: goldenstep-foundation
+    Description: Stack name used to deploy foundation.yaml
+
+  Ec2InstanceType:
+    Type: String
+    Default: m7i.large
+    Description: EC2 instance type selected for deployment
+    AllowedPattern: '^[a-z0-9]+\.[a-z0-9]+$'
+    ConstraintDescription: Enter a valid EC2 instance type.
+
+  AmazonLinuxAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+  RootVolumeSize:
+    Type: Number
+    Default: 30
+    MinValue: 30
+
+  DatabaseInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    AllowedValues:
+      - db.t4g.micro
+      - db.t4g.small
+      - db.t4g.medium
+
+  DatabaseName:
+    Type: String
+    Default: goldenstep
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]{0,63}$'
+
+  DatabaseAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+
+  DatabaseMultiAZ:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  EnableDatabaseMultiAZ: !Equals [!Ref DatabaseMultiAZ, 'true']
+
+Resources:
+  # RDS administrator credentials are managed by RDS.
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.4'
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBName: !Ref DatabaseName
+
+      MasterUsername: gsadmin
+      ManageMasterUserPassword: true
+
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+
+      DBSubnetGroupName:
+        Fn::ImportValue:
+          !Sub '${FoundationStackName}-DatabaseSubnetGroupName'
+
+      VPCSecurityGroups:
+        - Fn::ImportValue:
+            !Sub '${FoundationStackName}-DatabaseSecurityGroupId'
+
+      PubliclyAccessible: false
+      MultiAZ: !If [EnableDatabaseMultiAZ, true, false]
+      Port: '3306'
+
+      AutoMinorVersionUpgrade: true
+      AllowMajorVersionUpgrade: false
+      EngineLifecycleSupport: open-source-rds-extended-support-disabled
+
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-mysql'
+
+  # Credentials for the restricted application database user.
+  # The MySQL user must be provisioned separately before application startup.
+  ApplicationDatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Goldenstep application database credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"goldenstep_app"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-app-db-secret'
+
+  # Populate this secret before application deployment.
+  ExternalApiSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Goldenstep Naver API credentials
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-external-api-secret'
+
+  # EC2 runtime permissions
+  AppInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+
+      Policies:
+        - PolicyName: GoldenstepRuntimeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EcrAuthentication
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+
+              - Sid: PullApplicationImages
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}-frontend'
+                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}-backend'
+                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}-ai'
+
+              - Sid: ListAlgorithmData
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  Fn::ImportValue:
+                    !Sub '${FoundationStackName}-AlgorithmDataBucketArn'
+
+              - Sid: ReadAlgorithmData
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - Fn::Sub:
+                      - '${BucketArn}/*'
+                      - BucketArn:
+                          Fn::ImportValue:
+                            !Sub '${FoundationStackName}-AlgorithmDataBucketArn'
+
+              - Sid: ReadApplicationSecrets
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref ApplicationDatabaseSecret
+                  - !Ref ExternalApiSecret
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-ec2-role'
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AppInstanceRole
+
+  # Application host
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmazonLinuxAmi
+      InstanceType: !Ref Ec2InstanceType
+      IamInstanceProfile: !Ref AppInstanceProfile
+
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: true
+          SubnetId:
+            Fn::ImportValue:
+              !Sub '${FoundationStackName}-PublicSubnetId'
+          GroupSet:
+            - Fn::ImportValue:
+                !Sub '${FoundationStackName}-AppSecurityGroupId'
+
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref RootVolumeSize
+            Encrypted: true
+            DeleteOnTermination: true
+
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euo pipefail
+          umask 027
+
+          dnf install -y docker jq
+
+          systemctl enable --now docker
+          systemctl enable --now amazon-ssm-agent
+
+          # Reserve 4 GiB of swap for temporary memory pressure.
+          if [ ! -f /swapfile ]; then
+            (umask 077; dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none)
+            chmod 0600 /swapfile
+            mkswap /swapfile
+          fi
+          if ! swapon --show=NAME --noheadings | grep -Fxq /swapfile; then
+            swapon /swapfile
+          fi
+          if ! grep -Eq '^/swapfile[[:space:]]' /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          fi
+          echo 'vm.swappiness=10' > /etc/sysctl.d/99-goldenstep-swap.conf
+          sysctl -p /etc/sysctl.d/99-goldenstep-swap.conf
+
+          install -d -m 0755 /opt/goldenstep
+          install -d -m 0755 /opt/goldenstep/infra
+          install -d -m 0755 /opt/goldenstep/data
+          install -d -m 0755 /opt/goldenstep/data/networks
+          install -d -m 0755 /opt/goldenstep/data/pois
+          install -d -m 0755 /opt/goldenstep/nginx
+          install -d -m 0700 /opt/goldenstep/secrets
+          install -d -m 0700 /opt/goldenstep/letsencrypt
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-app'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AppElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-app-eip'
+
+  AppElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref AppInstance
+      AllocationId: !GetAtt AppElasticIp.AllocationId
+
+Outputs:
+  AppInstanceId:
+    Value: !Ref AppInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-AppInstanceId'
+
+  AppPublicIp:
+    Value: !Ref AppElasticIp
+
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+
+  DatabasePort:
+    Value: !GetAtt Database.Endpoint.Port
+
+  DatabaseName:
+    Value: !Ref DatabaseName
+
+  DatabaseAdminSecretArn:
+    Value: !GetAtt Database.MasterUserSecret.SecretArn
+
+  ApplicationDatabaseSecretArn:
+    Value: !Ref ApplicationDatabaseSecret
+
+  ExternalApiSecretArn:
+    Value: !Ref ExternalApiSecret

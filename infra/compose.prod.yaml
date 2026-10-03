@@ -1,0 +1,134 @@
+name: goldenstep-app-stack
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
+    container_name: gs-frontend-web
+    restart: unless-stopped
+
+    env_file:
+      - path: ${FRONTEND_ENV_FILE:?FRONTEND_ENV_FILE is required}
+        required: true
+        format: raw
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - type: bind
+        source: ${NGINX_CONFIG_PATH:?NGINX_CONFIG_PATH is required}
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ${TLS_CERT_DIR:?TLS_CERT_DIR is required}
+        target: /etc/letsencrypt
+        read_only: true
+        bind:
+          create_host_path: false
+
+    depends_on:
+      backend:
+        condition: service_started
+
+    networks:
+      - goldenstep
+
+    logging: *default-logging
+
+  backend:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    container_name: gs-backend-api
+    restart: unless-stopped
+
+    expose:
+      - "8080"
+
+    env_file:
+      - path: ${BACKEND_ENV_FILE:?BACKEND_ENV_FILE is required}
+        required: true
+        format: raw
+
+    environment:
+      SPRING_PROFILES_ACTIVE: infra,fastapi
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m
+      AI_BASE_URL: http://algorithm:8000
+      TZ: Asia/Seoul
+
+    depends_on:
+      algorithm:
+        condition: service_healthy
+
+    stop_grace_period: 30s
+
+    networks:
+      - goldenstep
+
+    logging: *default-logging
+
+  algorithm:
+    image: ${ALGORITHM_IMAGE:?ALGORITHM_IMAGE is required}
+    container_name: gs-ai-engine
+    restart: unless-stopped
+    init: true
+
+    expose:
+      - "8000"
+
+    environment:
+      TZ: Asia/Seoul
+      CACHE_GRAPH_PATH: /app/data/networks/seoul_walk_network.graphml
+      BUILDING_POI_DATA_PATH: /app/data/pois/seoul_building_pois_3.parquet
+      PUBLIC_POI_DATA_PATH: /app/data/pois/seoul_public_pois.geojson
+
+    volumes:
+      - type: bind
+        source: ${AI_DATA_DIR:?AI_DATA_DIR is required}
+        target: /app/data
+        read_only: true
+        bind:
+          create_host_path: false
+
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - --show-error
+        - http://localhost:8000/health
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 10
+
+    stop_grace_period: 90s
+
+    networks:
+      - goldenstep
+
+    logging: *default-logging
+
+networks:
+  goldenstep:
+    name: goldenstep-bridge-net
+    driver: bridge

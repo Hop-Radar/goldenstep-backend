@@ -2,14 +2,8 @@ spring:
   application:
     name: goldenstep
 
-  datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-
-  sql:
-    init:
-      mode: always
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local,fastapi}
 
   jpa:
     hibernate:
@@ -18,3 +12,12 @@ spring:
 
 server:
   port: 8080
+
+goldenstep:
+  search:
+    cleanup:
+      initial-delay-ms: 60000
+      fixed-delay-ms: 60000
+  health:
+    connect-timeout-ms: ${HEALTH_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${HEALTH_READ_TIMEOUT_MS:3000}
