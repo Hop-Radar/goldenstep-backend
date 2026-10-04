@@ -245,6 +245,18 @@ CREATE TABLE IF NOT EXISTS `snapshot` (
     `revoked_at` DATETIME NULL DEFAULT NULL
         COMMENT '공유 링크 폐기 시각',
 
+    `last_seen_at` DATETIME NULL DEFAULT NULL
+        COMMENT '공유 당시 마지막 확인 시각',
+
+    `additional_info` VARCHAR(500) NULL DEFAULT NULL
+        COMMENT '공유 당시 추가 정보',
+
+    `time_point` VARCHAR(16) NULL DEFAULT NULL
+        COMMENT '공유한 분석 시간점',
+
+    `boundary_zone` JSON NULL
+        COMMENT '공유 당시 GeoJSON 탐색 경계',
+
     CONSTRAINT `pk_snapshot`
         PRIMARY KEY (`id`),
 
@@ -287,7 +299,7 @@ CREATE TABLE IF NOT EXISTS `snapshot_place` (
     `priority_rank` TINYINT NOT NULL
         COMMENT '공유 당시 추천 순위',
 
-    `name` VARCHAR(150) NOT NULL
+    `name` VARCHAR(255) NOT NULL
         COMMENT '공유 장소명',
 
     `address` VARCHAR(255) NULL DEFAULT NULL
@@ -298,6 +310,9 @@ CREATE TABLE IF NOT EXISTS `snapshot_place` (
 
     `lng` DECIMAL(10, 7) NOT NULL
         COMMENT '공유 장소 경도',
+
+    `checked_at` DATETIME NULL DEFAULT NULL
+        COMMENT '공유 당시 장소 확인 완료 시각',
 
     CONSTRAINT `pk_snapshot_place`
         PRIMARY KEY (`id`),
