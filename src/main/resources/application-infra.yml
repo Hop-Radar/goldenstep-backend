@@ -9,6 +9,8 @@ spring:
       mode: never
 
 goldenstep:
+  snapshot:
+    frontend-base-url: ${FRONTEND_BASE_URL:https://www.goldenstep.site}
   cookie:
     secure: true
 

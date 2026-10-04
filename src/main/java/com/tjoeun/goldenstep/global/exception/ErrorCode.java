@@ -56,6 +56,10 @@ public enum ErrorCode {
 	// 추천 장소 상세 오류
 	INVALID_PLACE_ID(400, "P001", "추천 장소 ID는 1 이상의 정수여야 합니다."),
 	PRIORITY_PLACE_NOT_FOUND(404, "P002", "현재 탐색 세션에서 요청한 추천 장소를 찾을 수 없습니다."),
+
+	// 공유 스냅샷 오류
+	SNAPSHOT_NOT_FOUND(404, "SH001", "공유된 탐색 정보를 찾을 수 없습니다."),
+	SNAPSHOT_UNAVAILABLE(410, "SH002", "공유 링크가 만료되었거나 폐기되었습니다."),
 	;
 
 	private final int status;
