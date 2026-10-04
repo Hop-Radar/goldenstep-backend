@@ -1,4 +1,4 @@
-ㅎpackage com.tjoeun.goldenstep.snapshot.controller;
+package com.tjoeun.goldenstep.snapshot.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CookieValue;
