@@ -4,6 +4,8 @@ name: Backend CD
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
 
 permissions:
   contents: read
