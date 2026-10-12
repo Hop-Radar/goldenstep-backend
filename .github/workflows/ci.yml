@@ -3,9 +3,19 @@ name: Backend CI
 on:
   pull_request:
     branches: [develop, main]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/wiki/**'
+      - 'docs/assets/**'
+      - 'docs/wiki-publishing.md'
 
   push:
     branches: [develop]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/wiki/**'
+      - 'docs/assets/**'
+      - 'docs/wiki-publishing.md'
 
 permissions:
   contents: read

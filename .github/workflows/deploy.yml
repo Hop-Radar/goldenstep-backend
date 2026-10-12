@@ -4,6 +4,11 @@ name: Backend CD
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/wiki/**'
+      - 'docs/assets/**'
+      - 'docs/wiki-publishing.md'
 
 permissions:
   contents: read
